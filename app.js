@@ -21,8 +21,8 @@ const store = {
   load() {
     try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch { return {}; }
   },
-  save(cfg) {
-    try { localStorage.setItem(STORE_KEY, JSON.stringify(cfg)); } catch { /* приватный режим */ }
+  save(c) {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(c)); } catch { /* приватный режим */ }
   },
   clear() {
     try { localStorage.removeItem(STORE_KEY); } catch { /* ignore */ }
@@ -58,6 +58,16 @@ async function login(email, password) {
   return data.token;
 }
 
+let reloginPromise = null;
+function relogin() {
+  if (!cfg.login || !cfg.password) return Promise.reject(new ApiError('Нужно войти заново.', 401));
+  // Параллельные запросы ждут один и тот же вход, а не логинятся каждый сам
+  reloginPromise ??= login(cfg.login, cfg.password)
+    .then((token) => { cfg.token = token; store.save(cfg); })
+    .finally(() => { reloginPromise = null; });
+  return reloginPromise;
+}
+
 // Вызов с токеном; при 401 один раз перелогиниваемся сохранённым паролем
 async function call(path, body) {
   if (!cfg.token) await relogin();
@@ -70,50 +80,52 @@ async function call(path, body) {
   }
 }
 
-let reloginPromise = null;
-function relogin() {
-  if (!cfg.login || !cfg.password) return Promise.reject(new ApiError('Нужно войти заново.', 401));
-  // Параллельные запросы ждут один и тот же вход, а не логинятся каждый сам
-  reloginPromise ??= login(cfg.login, cfg.password)
-    .then((token) => { cfg.token = token; store.save(cfg); })
-    .finally(() => { reloginPromise = null; });
-  return reloginPromise;
-}
-
 // ===== Helpers =====
 const $ = (id) => document.getElementById(id);
 
 function show(screen) {
-  $('main').hidden = screen !== 'main';
-  $('settings').hidden = screen !== 'settings';
+  for (const s of ['loginScreen', 'mainScreen', 'settingsScreen']) $(s).hidden = s !== screen;
+  window.scrollTo(0, 0);
 }
 
 function setMsg(el, text, kind) {
   el.textContent = text || '';
-  el.className = el.className.replace(/\s?(error|ok)\b/g, '') + (kind ? ' ' + kind : '');
+  el.classList.remove('error', 'ok');
+  if (kind) el.classList.add(kind);
 }
 
+function parseNum(v) { return parseFloat(String(v).replace(',', '.')); }
+
 function formatTemp(v) {
-  const n = parseFloat(String(v).replace(',', '.'));
-  if (!isFinite(n)) return String(v ?? '—');
-  return n.toFixed(1);
+  const n = parseNum(v);
+  return isFinite(n) ? n.toFixed(1) : String(v ?? '—');
 }
 
 function formatTime(unix) {
   if (!unix) return '';
   const d = new Date(unix * 1000);
-  const now = new Date();
   const hm = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-  if (d.toDateString() === now.toDateString()) return hm;
+  if (d.toDateString() === new Date().toDateString()) return hm;
   return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) + ' ' + hm;
 }
 
-// ===== Main screen =====
+function pickParam(params, preferId, def, writableOnly) {
+  const list = params.filter((p) => !writableOnly || p.is_writable !== false);
+  return (
+    list.find((p) => p.id == preferId) ||
+    list.find((p) => p.code === def.code) ||
+    list.find((p) => def.name.test(p.name || ''))
+  );
+}
+
+// ===== Главный экран =====
 let timer = null;
 let busy = false;
 
 async function refresh() {
   if (!cfg.tempId || !cfg.resetId) return;
+  const hero = document.querySelector('.hero');
+  hero.classList.add('loading');
   try {
     const [rows, devices] = await Promise.all([
       call('parameters/last-data', { ids: [cfg.tempId, cfg.resetId] }),
@@ -125,33 +137,49 @@ async function refresh() {
     const t = byId[cfg.tempId];
     const r = byId[cfg.resetId];
     $('tempValue').textContent = t ? formatTemp(t.v) : '—';
-    $('resetValue').textContent = r ? String(r.v) : '—';
-    $('reset1').classList.toggle('active', r && String(r.v) === '1');
-    $('reset0').classList.toggle('active', r && String(r.v) === '0');
+    hero.classList.toggle('cold', t && parseNum(t.v) < 40);
+    $('updated').textContent = t ? 'Обновлено ' + formatTime(t.d) : 'Нет данных от прибора';
+
+    const rv = r ? String(r.v) : null;
+    const badge = $('resetBadge');
+    badge.textContent = rv === null ? '—' : 'Сейчас: ' + rv;
+    badge.className = 'badge' + (rv === '1' ? ' on' : rv === '0' ? ' off' : '');
+    $('reset1').classList.toggle('active', rv === '1');
+    $('reset0').classList.toggle('active', rv === '0');
+    lastReset = rv;
 
     const dev = Array.isArray(devices) ? devices.find((d) => d.id == cfg.deviceId) : null;
     const status = dev && dev.status;
     const dot = $('statusDot');
     dot.className = 'dot';
-    let label = 'нет данных';
+    let label = 'нет связи с прибором';
     if (status === 'online') { dot.classList.add('online'); label = 'онлайн'; }
     else if (status === 'alarm' || status === 'unreadalarm') { dot.classList.add('alarm'); label = 'авария'; }
     else if (status === 'offline') { label = 'офлайн'; }
     else if (t) { dot.classList.add('online'); label = 'данные получены'; }
-    const when = t ? formatTime(t.d) : '';
-    $('statusText').textContent = when ? `${label} · ${when}` : label;
+    $('statusText').textContent = label;
   } catch (e) {
     $('statusDot').className = 'dot stale';
     $('statusText').textContent = e.message;
-    if (e.status === 401 && !cfg.password) openSettings();
+    if (e.status === 401 && !cfg.password) { show('loginScreen'); }
+  } finally {
+    hero.classList.remove('loading');
   }
 }
+let lastReset = null;
 
 function startTimer() {
   stopTimer();
-  timer = setInterval(() => { if (!document.hidden) refresh(); }, REFRESH_MS);
+  timer = setInterval(() => { if (!document.hidden && !$('mainScreen').hidden) refresh(); }, REFRESH_MS);
 }
 function stopTimer() { if (timer) clearInterval(timer); timer = null; }
+
+function openMain() {
+  show('mainScreen');
+  $('deviceName').textContent = cfg.deviceName || 'Котёл';
+  refresh();
+  startTimer();
+}
 
 async function writeReset(value) {
   if (busy) return;
@@ -167,16 +195,15 @@ async function writeReset(value) {
     });
     if (typeof res === 'string') throw new ApiError(res);
     if (res && res.status === 'error') throw new ApiError(writeErrorText(res));
-    setMsg(msg, `Команда Reset = ${value} отправлена. Жду ответ прибора…`, 'ok');
+    setMsg(msg, `Команда отправлена, жду прибор…`, 'ok');
     // Запись идёт через облако асинхронно: несколько раз перечитываем значение
+    let applied = false;
     for (const delay of [2000, 4000, 6000, 10000]) {
       await new Promise((r) => setTimeout(r, delay));
       await refresh();
-      if ($('resetValue').textContent === String(value)) {
-        setMsg(msg, `Reset = ${value} ✓`, 'ok');
-        break;
-      }
+      if (lastReset === String(value)) { applied = true; break; }
     }
+    setMsg(msg, applied ? `Reset = ${value} ✓` : 'Команда в очереди — прибор применит её при следующем опросе', 'ok');
   } catch (e) {
     setMsg(msg, 'Не записалось: ' + e.message, 'error');
   } finally {
@@ -186,10 +213,9 @@ async function writeReset(value) {
 }
 
 function writeErrorText(res) {
+  const sms = 'в OwenCloud включено SMS-подтверждение записи — отключите его';
   const map = {
-    wrong_sms_tag: 'в аккаунте включено SMS-подтверждение записи — отключите его в OwenCloud',
-    expired_sms_code: 'в аккаунте включено SMS-подтверждение записи — отключите его в OwenCloud',
-    wrong_sms_code: 'в аккаунте включено SMS-подтверждение записи — отключите его в OwenCloud',
+    wrong_sms_tag: sms, expired_sms_code: sms, wrong_sms_code: sms,
     parameter_not_writable: 'параметр недоступен для записи',
     invalid_value: 'недопустимое значение',
     can_not_write: 'прибор не принял запись',
@@ -197,37 +223,75 @@ function writeErrorText(res) {
   return map[res.code] || res.message || 'ошибка записи';
 }
 
-// ===== Settings =====
-let devicesCache = [];
+// ===== Вход =====
+$('loginForm').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const email = $('login').value.trim();
+  const password = $('password').value;
+  const btn = $('loginBtn');
+  btn.disabled = true;
+  setMsg($('loginMsg'), 'Вхожу…');
+  try {
+    const token = await login(email, password);
+    cfg = { ...cfg, login: email, password, token };
+    store.save(cfg);
+    setMsg($('loginMsg'), 'Ищу прибор и параметры…');
+    if (await autoSetup()) {
+      setMsg($('loginMsg'), '');
+      openMain();
+    } else {
+      setMsg($('loginMsg'), '');
+      await openSettings();
+    }
+  } catch (e) {
+    setMsg($('loginMsg'), e.message, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+});
 
-function openSettings() {
-  stopTimer();
-  show('settings');
-  $('login').value = cfg.login || '';
-  $('password').value = cfg.password || '';
-  $('closeSettings').hidden = !(cfg.tempId && cfg.resetId);
-  $('confirmWrite').checked = cfg.confirmWrite !== false;
-  if (cfg.token) loadDevices().catch(() => {});
+// Пытаемся сами найти прибор с P512 и P527. true — если нашли однозначно.
+async function autoSetup() {
+  const devices = (await call('device/index', {})) || [];
+  devicesCache = devices;
+  const found = [];
+  for (const d of devices) {
+    const info = await call('device/' + d.id, []);
+    const params = (info && info.parameters) || [];
+    const t = params.find((p) => p.code === DEFAULT_TEMP.code);
+    const r = params.find((p) => p.code === DEFAULT_RESET.code);
+    if (t && r) found.push({ d, t, r });
+  }
+  if (found.length !== 1) return false;
+  const { d, t, r } = found[0];
+  cfg = { ...cfg, deviceId: d.id, deviceName: d.name, tempId: t.id, resetId: r.id };
+  store.save(cfg);
+  return true;
 }
 
-function closeSettings() {
-  show('main');
-  $('deviceName').textContent = cfg.deviceName || 'Котёл';
-  refresh();
-  startTimer();
+// ===== Настройки =====
+let devicesCache = [];
+
+async function openSettings() {
+  stopTimer();
+  show('settingsScreen');
+  $('accountEmail').textContent = cfg.login || '';
+  $('confirmWrite').checked = cfg.confirmWrite !== false;
+  $('closeSettings').hidden = !(cfg.tempId && cfg.resetId);
+  try {
+    await loadDevices();
+  } catch (e) {
+    setMsg($('paramMsg'), e.message, 'error');
+  }
 }
 
 async function loadDevices() {
-  const list = await call('device/index', {});
-  devicesCache = Array.isArray(list) ? list : [];
+  if (!devicesCache.length) devicesCache = (await call('device/index', {})) || [];
   const sel = $('deviceSelect');
   sel.innerHTML = '';
-  if (!devicesCache.length) {
-    setMsg($('paramMsg'), 'В аккаунте нет приборов.', 'error');
-  }
+  if (!devicesCache.length) setMsg($('paramMsg'), 'В аккаунте нет приборов.', 'error');
   devicesCache.forEach((d) => sel.add(new Option(d.name || ('Прибор ' + d.id), d.id)));
   if (cfg.deviceId && devicesCache.some((d) => d.id == cfg.deviceId)) sel.value = cfg.deviceId;
-  $('paramForm').hidden = false;
   await loadParams(sel.value);
 }
 
@@ -236,38 +300,19 @@ async function loadParams(deviceId) {
   setMsg($('paramMsg'), 'Загружаю параметры…');
   const dev = await call('device/' + deviceId, []);
   const params = (dev && dev.parameters) || [];
+  const same = deviceId == cfg.deviceId;
   const fill = (sel, preferId, def, writableOnly) => {
     sel.innerHTML = '';
     params
       .filter((p) => !writableOnly || p.is_writable !== false)
       .forEach((p) => sel.add(new Option(`${p.name} (${p.code})`, p.id)));
-    const pick =
-      params.find((p) => p.id == preferId) ||
-      params.find((p) => p.code === def.code) ||
-      params.find((p) => def.name.test(p.name || ''));
+    const pick = pickParam(params, preferId, def, writableOnly);
     if (pick) sel.value = pick.id;
   };
-  const same = deviceId == cfg.deviceId;
   fill($('tempSelect'), same && cfg.tempId, DEFAULT_TEMP, false);
   fill($('resetSelect'), same && cfg.resetId, DEFAULT_RESET, true);
   setMsg($('paramMsg'), params.length ? '' : 'У прибора нет параметров.', params.length ? '' : 'error');
 }
-
-$('loginForm').addEventListener('submit', async (ev) => {
-  ev.preventDefault();
-  const email = $('login').value.trim();
-  const password = $('password').value;
-  setMsg($('loginMsg'), 'Вхожу…');
-  try {
-    const token = await login(email, password);
-    cfg = { ...cfg, login: email, password, token };
-    store.save(cfg);
-    setMsg($('loginMsg'), 'Вход выполнен', 'ok');
-    await loadDevices();
-  } catch (e) {
-    setMsg($('loginMsg'), e.message, 'error');
-  }
-});
 
 $('deviceSelect').addEventListener('change', (ev) => {
   loadParams(ev.target.value).catch((e) => setMsg($('paramMsg'), e.message, 'error'));
@@ -292,39 +337,85 @@ $('paramForm').addEventListener('submit', (ev) => {
     confirmWrite: $('confirmWrite').checked,
   };
   store.save(cfg);
-  closeSettings();
+  openMain();
 });
 
 $('logout').addEventListener('click', () => {
-  if (!confirm('Стереть логин, пароль и настройки с этого телефона?')) return;
+  if (!confirm('Выйти и стереть логин, пароль и настройки с этого телефона?')) return;
   store.clear();
   cfg = {};
-  $('paramForm').hidden = true;
-  setMsg($('loginMsg'), '');
-  openSettings();
+  devicesCache = [];
+  stopTimer();
+  $('password').value = '';
+  show('loginScreen');
 });
 
 $('openSettings').addEventListener('click', openSettings);
-$('closeSettings').addEventListener('click', closeSettings);
+$('closeSettings').addEventListener('click', openMain);
 $('refresh').addEventListener('click', refresh);
 $('reset1').addEventListener('click', () => writeReset(1));
 $('reset0').addEventListener('click', () => writeReset(0));
 
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && !$('main').hidden) refresh();
+  if (!document.hidden && !$('mainScreen').hidden) refresh();
 });
 
-// ===== Start =====
+// ===== Инструкция по виджету =====
+const isIOS = !/Android/i.test(navigator.userAgent) &&
+  (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+$(isIOS ? 'helpIos' : 'helpAndroid').hidden = false;
+
+// Код скриптов загружаем заранее: копирование в буфер должно произойти прямо в момент нажатия
+const scripts = {};
+$('widgetHelp').addEventListener('toggle', () => {
+  if (!$('widgetHelp').open) return;
+  for (const f of ['android/http-shortcuts.js', 'scriptable/Kotel.js']) {
+    if (!scripts[f]) fetch(f).then((r) => r.text()).then((t) => { scripts[f] = t; }).catch(() => {});
+  }
+});
+
+function copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(text);
+  }
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  const ok = document.execCommand('copy');
+  ta.remove();
+  return ok ? Promise.resolve() : Promise.reject(new Error('copy failed'));
+}
+
+document.querySelectorAll('.copy').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const file = btn.dataset.file || 'android/http-shortcuts.js';
+    let text = scripts[file];
+    if (!text) { setMsg($('copyMsg'), 'Код ещё загружается, нажмите ещё раз', 'error'); return; }
+    if (btn.dataset.action) {
+      text = text.replace(/const ACTION = '[a-z0-9]+';/, `const ACTION = '${btn.dataset.action}';`);
+    }
+    copyText(text)
+      .then(() => setMsg($('copyMsg'), 'Скопировано — вставьте в приложение', 'ok'))
+      .catch(() => setMsg($('copyMsg'), 'Не удалось скопировать. Откройте ' + file + ' на GitHub', 'error'));
+  });
+});
+
+// ===== Старт =====
 if (cfg.tempId && cfg.resetId && (cfg.token || cfg.password)) {
-  closeSettings();
-  // Ссылка вида ?action=reset1 / ?action=reset0 (для ярлыков и виджетов)
+  openMain();
+  // Ссылка вида ?action=reset1 / ?action=reset0 (ярлыки на иконке приложения)
   const action = new URLSearchParams(location.search).get('action');
   if (action === 'reset1' || action === 'reset0') {
     history.replaceState(null, '', location.pathname);
     setTimeout(() => writeReset(action === 'reset1' ? 1 : 0), 300);
   }
-} else {
+} else if (cfg.token || cfg.password) {
   openSettings();
+} else {
+  show('loginScreen');
 }
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
