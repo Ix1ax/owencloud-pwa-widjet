@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg"
+    android:fillViewport="true"
+    android:fitsSystemWindows="true">
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="20dp">
+
+        <!-- ===== Вход ===== -->
+        <LinearLayout
+            android:id="@+id/login_panel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:layout_marginTop="80dp"
+            android:gravity="center_horizontal"
+            android:orientation="vertical">
+
+            <ImageView
+                android:layout_width="76dp"
+                android:layout_height="76dp"
+                android:contentDescription="@null"
+                android:src="@mipmap/ic_launcher" />
+
+            <TextView
+                style="@style/Title"
+                android:layout_marginTop="14dp"
+                android:text="Котёл" />
+
+            <TextView
+                style="@style/Muted"
+                android:layout_marginBottom="24dp"
+                android:text="Вход через аккаунт OwenCloud" />
+
+            <EditText
+                android:id="@+id/email"
+                style="@style/Field"
+                android:autofillHints="emailAddress"
+                android:hint="Email"
+                android:inputType="textEmailAddress" />
+
+            <EditText
+                android:id="@+id/password"
+                style="@style/Field"
+                android:layout_marginTop="12dp"
+                android:autofillHints="password"
+                android:hint="Пароль"
+                android:inputType="textPassword" />
+
+            <Button
+                android:id="@+id/login_btn"
+                style="@style/Primary"
+                android:layout_marginTop="16dp"
+                android:text="Войти" />
+
+            <TextView
+                android:id="@+id/login_msg"
+                style="@style/Muted"
+                android:layout_marginTop="12dp"
+                android:gravity="center"
+                android:textColor="@color/red_text" />
+
+            <TextView
+                style="@style/Muted"
+                android:layout_marginTop="24dp"
+                android:gravity="center"
+                android:text="Email и пароль хранятся только на этом телефоне и отправляются только в OwenCloud."
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <!-- ===== Готово ===== -->
+        <LinearLayout
+            android:id="@+id/ready_panel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/device"
+                style="@style/Title"
+                android:layout_marginTop="8dp"
+                android:text="Котельная" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:background="@drawable/card"
+                android:orientation="vertical"
+                android:padding="22dp">
+
+                <TextView style="@style/Muted" android:text="Температура" />
+
+                <TextView
+                    android:id="@+id/temp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="—"
+                    android:textColor="@color/text"
+                    android:textSize="72sp"
+                    android:textStyle="bold" />
+
+                <TextView android:id="@+id/meta" style="@style/Muted" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/add_widget"
+                style="@style/Primary"
+                android:layout_marginTop="16dp"
+                android:text="Добавить виджет на рабочий стол" />
+
+            <TextView
+                style="@style/Muted"
+                android:layout_marginTop="10dp"
+                android:text="Или вручную: долгое нажатие на рабочем столе → Виджеты → «Котёл». Нажатие на температуру в виджете обновляет её, кнопки 1 и 0 записывают Reset."
+                android:textSize="13sp" />
+
+            <Switch
+                android:id="@+id/confirm_switch"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:minHeight="48dp"
+                android:text="Спрашивать подтверждение перед записью"
+                android:textColor="@color/text"
+                android:textSize="15sp" />
+
+            <Button
+                android:id="@+id/refresh"
+                style="@style/Secondary"
+                android:layout_marginTop="12dp"
+                android:text="Обновить" />
+
+            <TextView
+                android:id="@+id/account"
+                style="@style/Muted"
+                android:layout_marginTop="24dp" />
+
+            <Button
+                android:id="@+id/logout"
+                style="@style/Secondary"
+                android:layout_marginTop="8dp"
+                android:text="Выйти и стереть данные"
+                android:textColor="@color/red_text" />
+        </LinearLayout>
+    </FrameLayout>
+</ScrollView>

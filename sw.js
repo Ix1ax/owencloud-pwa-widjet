@@ -1,5 +1,5 @@
 // Кэшируем только оболочку приложения. Запросы к api.owencloud.ru всегда идут в сеть.
-const CACHE = 'kotel-v3';
+const CACHE = 'kotel-v4';
 const SHELL = ['./', 'index.html', 'style.css?v=3', 'app.js?v=3', 'manifest.webmanifest', 'icons/icon-192.png'];
 
 self.addEventListener('install', (e) => {

@@ -66,7 +66,14 @@
     <details class="card widget-help" id="widgetHelp">
       <summary>Виджет на рабочий стол</summary>
       <div id="helpAndroid" class="help" hidden>
-        <p>Сайт сам не может быть виджетом на Android, поэтому виджет делается бесплатным приложением <b>HTTP Shortcuts</b>.</p>
+        <p>Виджет с температурой и кнопками 1 / 0 — в нашем маленьком приложении:</p>
+        <ol>
+          <li><a class="btn btn-small" href="https://github.com/Ix1ax/owencloud-pwa-widjet/releases/latest/download/kotel.apk">Скачать kotel.apk</a></li>
+          <li>Откройте скачанный файл → разрешите установку из этого источника → <b>Установить</b>.</li>
+          <li>Откройте «Котёл», войдите → <b>Добавить виджет на рабочий стол</b>.</li>
+        </ol>
+        <details>
+        <summary class="muted">Другой способ — через приложение HTTP Shortcuts</summary>
         <ol>
           <li>Установите <b>HTTP Shortcuts</b> из Google Play / RuStore / F-Droid.</li>
           <li>В нём: ⋮ → <b>Variables</b> → <b>+</b> → тип <b>Static</b>. Создайте 4 переменные:
@@ -80,6 +87,7 @@
           <li>Рабочий стол → долгое нажатие → <b>Виджеты</b> → HTTP Shortcuts:
             виджет <b>Variable</b> (переменная <code>kotel</code>, по нажатию — «Котёл обновить») и два виджета-ярлыка RESET 1 / RESET 0.</li>
         </ol>
+        </details>
         <p class="muted">Быстрый вариант без приложений: долгое нажатие на иконку «Котёл» → ярлыки RESET 1 / RESET 0 можно перетащить на рабочий стол.</p>
       </div>
       <div id="helpIos" class="help" hidden>
