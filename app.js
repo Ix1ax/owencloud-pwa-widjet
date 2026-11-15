@@ -374,19 +374,38 @@ $('widgetHelp').addEventListener('toggle', () => {
   }
 });
 
-function copyText(text) {
-  if (navigator.clipboard && window.isSecureContext) {
-    return navigator.clipboard.writeText(text);
-  }
+// Старый способ копирования — работает там, где Clipboard API запрещён (например, в установленном PWA)
+function copyLegacy(text) {
   const ta = document.createElement('textarea');
   ta.value = text;
+  ta.setAttribute('readonly', '');
   ta.style.position = 'fixed';
+  ta.style.top = '0';
   ta.style.opacity = '0';
   document.body.appendChild(ta);
+  ta.focus();
   ta.select();
-  const ok = document.execCommand('copy');
+  ta.setSelectionRange(0, text.length);
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch { ok = false; }
   ta.remove();
-  return ok ? Promise.resolve() : Promise.reject(new Error('copy failed'));
+  return ok;
+}
+
+function copyText(text) {
+  // Сначала синхронный способ — он срабатывает прямо в момент нажатия
+  if (copyLegacy(text)) return Promise.resolve();
+  if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
+  return Promise.reject(new Error('copy failed'));
+}
+
+// Если скопировать не вышло — показываем код, чтобы выделить его вручную
+function showCodeBox(text) {
+  const box = $('codeBox');
+  box.hidden = false;
+  box.value = text;
+  box.focus();
+  box.select();
 }
 
 document.querySelectorAll('.copy').forEach((btn) => {
@@ -398,8 +417,11 @@ document.querySelectorAll('.copy').forEach((btn) => {
       text = text.replace(/const ACTION = '[a-z0-9]+';/, `const ACTION = '${btn.dataset.action}';`);
     }
     copyText(text)
-      .then(() => setMsg($('copyMsg'), 'Скопировано — вставьте в приложение', 'ok'))
-      .catch(() => setMsg($('copyMsg'), 'Не удалось скопировать. Откройте ' + file + ' на GitHub', 'error'));
+      .then(() => { $('codeBox').hidden = true; setMsg($('copyMsg'), 'Скопировано — вставьте в приложение', 'ok'); })
+      .catch(() => {
+        showCodeBox(text);
+        setMsg($('copyMsg'), 'Телефон не дал скопировать автоматически: нажмите на поле с кодом → «Выбрать все» → «Копировать»', 'error');
+      });
   });
 });
 
