@@ -37,6 +37,19 @@ class Prefs(context: Context) {
     var lastTime: Long
         get() = sp.getLong("lastTime", 0)
         set(v) = sp.edit().putLong("lastTime", v).apply()
+    /** Статус прибора из OwenCloud: online / offline / alarm / unreadalarm. */
+    var deviceStatus: String?
+        get() = sp.getString("deviceStatus", null)
+        set(v) = sp.edit().putString("deviceStatus", v).apply()
+
+    /**
+     * Прибор не на связи: OwenCloud сообщает offline или последнее показание
+     * температуры старше 15 минут (в том числе когда нет интернета на телефоне).
+     */
+    val offline: Boolean
+        get() = deviceStatus == "offline" ||
+            (lastTime > 0 && System.currentTimeMillis() - lastTime * 1000 > STALE_MS)
+
     var lastStatus: String?
         get() = sp.getString("lastStatus", null)
         set(v) = sp.edit().putString("lastStatus", v).apply()
@@ -57,4 +70,8 @@ class Prefs(context: Context) {
     }
 
     fun clear() = sp.edit().clear().apply()
+
+    companion object {
+        const val STALE_MS = 15 * 60 * 1000L
+    }
 }

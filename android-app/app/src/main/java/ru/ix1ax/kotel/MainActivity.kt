@@ -77,6 +77,7 @@ class MainActivity : Activity() {
         ui.removeCallbacks(autoRefresh)
         if (prefs.isConfigured) { render(); refresh(quiet = true) }
         ui.postDelayed(autoRefresh, 15000)
+        KotelWidget.scheduleTick(this) // на случай, если таймер виджета остановился
     }
 
     override fun onPause() {
@@ -96,9 +97,19 @@ class MainActivity : Activity() {
     private fun render() {
         val s = prefs.state
         v<TextView>(R.id.device).text = prefs.deviceName
-        v<TextView>(R.id.temp).text = KotelWidget.formatTemp(s.temp)
-        v<TextView>(R.id.updated).text =
-            if (prefs.lastTime > 0) "обновлено " + KotelWidget.timeFmt(prefs.lastTime) else ""
+        val offline = prefs.offline
+        v<TextView>(R.id.temp).apply {
+            text = KotelWidget.formatTemp(s.temp)
+            setTextColor(color(if (offline) R.color.muted else R.color.text))
+        }
+        v<TextView>(R.id.updated).apply {
+            text = when {
+                offline -> KotelWidget.offlineText(prefs)
+                prefs.lastTime > 0 -> "обновлено " + KotelWidget.timeFmt(prefs.lastTime)
+                else -> ""
+            }
+            setTextColor(color(if (offline) R.color.amber else R.color.muted))
+        }
 
         // Лампы
         v<ImageView>(R.id.lamp_work).setImageResource(if (s.working) R.drawable.lamp_green else R.drawable.lamp_off)

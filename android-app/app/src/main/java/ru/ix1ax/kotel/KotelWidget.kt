@@ -1,6 +1,8 @@
 package ru.ix1ax.kotel
 
+import android.app.AlarmManager
 import android.app.PendingIntent
+import android.os.SystemClock
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
@@ -22,11 +24,28 @@ class KotelWidget : AppWidgetProvider() {
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
         render(context)
         background(context) { refresh(context, busy = true) }
+        scheduleTick(context)
+    }
+
+    override fun onEnabled(context: Context) = scheduleTick(context)
+
+    override fun onDisabled(context: Context) {
+        context.getSystemService(AlarmManager::class.java).cancel(tickIntent(context))
     }
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
         when (intent.action) {
+            ACTION_TICK -> {
+                // Тихое обновление раз в минуту, без надписи «обновляю…»
+                background(context) { refresh(context, busy = false) }
+                scheduleTick(context)
+            }
+            // После перезагрузки и обновления приложения таймер сбрасывается — запускаем заново
+            Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED -> {
+                scheduleTick(context)
+                background(context) { refresh(context, busy = false) }
+            }
             ACTION_REFRESH -> background(context) { refresh(context, busy = true) }
             ACTION_WRITE -> {
                 val code = intent.getStringExtra(EXTRA_CODE) ?: return
@@ -46,6 +65,29 @@ class KotelWidget : AppWidgetProvider() {
 
     companion object {
         const val ACTION_REFRESH = "ru.ix1ax.kotel.REFRESH"
+        const val ACTION_TICK = "ru.ix1ax.kotel.TICK"
+        private const val TICK_MS = 60_000L
+
+        private fun tickIntent(context: Context): PendingIntent = PendingIntent.getBroadcast(
+            context, 20,
+            Intent(context, KotelWidget::class.java).setAction(ACTION_TICK),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        /**
+         * Следующее обновление через минуту. ELAPSED_REALTIME (без WAKEUP) не будит телефон:
+         * пока экран выключен и телефон спит — обновлений нет, батарея не тратится;
+         * как только телефон проснулся — сразу срабатывает и дальше идёт раз в минуту.
+         */
+        fun scheduleTick(context: Context) {
+            val manager = AppWidgetManager.getInstance(context)
+            if (manager.getAppWidgetIds(ComponentName(context, KotelWidget::class.java)).isEmpty()) return
+            context.getSystemService(AlarmManager::class.java).set(
+                AlarmManager.ELAPSED_REALTIME,
+                SystemClock.elapsedRealtime() + TICK_MS,
+                tickIntent(context)
+            )
+        }
         const val ACTION_WRITE = "ru.ix1ax.kotel.WRITE"
         const val EXTRA_CODE = "code"
         const val EXTRA_VALUE = "value"
@@ -98,12 +140,17 @@ class KotelWidget : AppWidgetProvider() {
                 return v
             }
 
+            val offline = prefs.offline
             v.setTextViewText(R.id.w_temp, formatTemp(s.temp))
+            v.setTextColor(R.id.w_temp, if (offline) Color.parseColor("#80FFFFFF") else Color.WHITE)
             v.setImageViewResource(R.id.w_lamp_work, if (s.working) R.drawable.lamp_green else R.drawable.lamp_off)
             v.setImageViewResource(R.id.w_lamp_alarm, if (s.alarm) R.drawable.lamp_red else R.drawable.lamp_off)
 
             val time = if (prefs.lastTime > 0) " · " + timeFmt(prefs.lastTime) else ""
-            v.setTextViewText(R.id.w_meta, busy ?: prefs.lastStatus ?: (prefs.deviceName + time))
+            val meta = busy
+                ?: if (offline) offlineText(prefs) else prefs.lastStatus ?: (prefs.deviceName + time)
+            v.setTextViewText(R.id.w_meta, meta)
+            v.setTextColor(R.id.w_meta, if (offline && busy == null) Color.parseColor("#FFC46B") else Color.parseColor("#A6FFFFFF"))
 
             // Кнопка сброса: залитая — Reset = 1, контурная — Reset = 0
             val on = P.isOn(s.reset)
@@ -147,7 +194,15 @@ class KotelWidget : AppWidgetProvider() {
             return String.format(Locale.US, "%.1f", n)
         }
 
-        fun timeFmt(unix: Long): String =
-            SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(unix * 1000))
+        /** «14:20», а если не сегодня — «15.11 14:20». */
+        fun timeFmt(unix: Long): String {
+            val date = Date(unix * 1000)
+            val day = SimpleDateFormat("yyyyMMdd", Locale.US)
+            val today = day.format(Date()) == day.format(date)
+            return SimpleDateFormat(if (today) "HH:mm" else "dd.MM HH:mm", Locale.getDefault()).format(date)
+        }
+
+        fun offlineText(prefs: Prefs): String =
+            if (prefs.lastTime > 0) "нет связи с " + timeFmt(prefs.lastTime) else "нет связи с прибором"
     }
 }

@@ -85,6 +85,17 @@ class OwenApi(private val prefs: Prefs) {
         }
     }
 
+    /** Статус прибора (online / offline / alarm …) или null, если не удалось узнать. */
+    fun deviceStatus(deviceId: Long): String? {
+        val body = JSONObject().put("device_ids", JSONArray().put(deviceId)).toString()
+        val arr = JSONArray(call("device/index", body))
+        for (i in 0 until arr.length()) {
+            val o = arr.getJSONObject(i)
+            if (o.optLong("id") == deviceId) return o.optString("status").ifBlank { null }
+        }
+        return null
+    }
+
     fun params(deviceId: Long): List<Param> {
         val arr = JSONObject(call("device/$deviceId", "[]")).optJSONArray("parameters") ?: JSONArray()
         return (0 until arr.length()).map {
@@ -159,6 +170,8 @@ object Repo {
             for ((code, id) in ids) data[id]?.let { values[code] = it.value }
             prefs.values = values
             data[ids[P.TEMP]]?.let { prefs.lastTime = it.time }
+            // Статус прибора — необязательный: если не удалось узнать, опираемся на время показаний
+            prefs.deviceStatus = runCatching { api.deviceStatus(prefs.deviceId) }.getOrNull()
             prefs.lastStatus = null
         } catch (e: Exception) {
             prefs.lastStatus = e.message ?: "Ошибка"
