@@ -1,6 +1,7 @@
 package ru.ix1ax.kotel
 
 import android.content.Context
+import org.json.JSONObject
 
 /** Настройки хранятся в приватной памяти приложения на телефоне. */
 class Prefs(context: Context) {
@@ -20,26 +21,19 @@ class Prefs(context: Context) {
         get() = sp.getLong("deviceId", 0)
         set(v) = sp.edit().putLong("deviceId", v).apply()
     var deviceName: String
-        get() = sp.getString("deviceName", null) ?: "Котёл"
+        get() = sp.getString("deviceName", null) ?: "Котельная"
         set(v) = sp.edit().putString("deviceName", v).apply()
-    var tempId: Long
-        get() = sp.getLong("tempId", 0)
-        set(v) = sp.edit().putLong("tempId", v).apply()
-    var resetId: Long
-        get() = sp.getLong("resetId", 0)
-        set(v) = sp.edit().putLong("resetId", v).apply()
 
-    var confirmWrite: Boolean
-        get() = sp.getBoolean("confirmWrite", true)
-        set(v) = sp.edit().putBoolean("confirmWrite", v).apply()
+    /** Код параметра (P512…) → его id в OwenCloud. */
+    var ids: Map<String, Long>
+        get() = readMap("ids") { o, k -> o.getLong(k) }
+        set(v) = sp.edit().putString("ids", JSONObject(v as Map<*, *>).toString()).apply()
 
-    // Последние значения — чтобы виджет сразу что-то показывал
-    var lastTemp: String?
-        get() = sp.getString("lastTemp", null)
-        set(v) = sp.edit().putString("lastTemp", v).apply()
-    var lastReset: String?
-        get() = sp.getString("lastReset", null)
-        set(v) = sp.edit().putString("lastReset", v).apply()
+    /** Последние значения: код → значение. */
+    var values: Map<String, String>
+        get() = readMap("values") { o, k -> o.getString(k) }
+        set(v) = sp.edit().putString("values", JSONObject(v as Map<*, *>).toString()).apply()
+
     var lastTime: Long
         get() = sp.getLong("lastTime", 0)
         set(v) = sp.edit().putLong("lastTime", v).apply()
@@ -47,8 +41,20 @@ class Prefs(context: Context) {
         get() = sp.getString("lastStatus", null)
         set(v) = sp.edit().putString("lastStatus", v).apply()
 
-    val isConfigured: Boolean
-        get() = password != null && tempId != 0L && resetId != 0L
+    var confirmWrite: Boolean
+        get() = sp.getBoolean("confirmWrite", true)
+        set(v) = sp.edit().putBoolean("confirmWrite", v).apply()
+
+    val loggedIn: Boolean get() = login != null && password != null
+    val isConfigured: Boolean get() = loggedIn && ids.containsKey(P.TEMP) && ids.containsKey(P.RESET)
+
+    val state: State get() = State(values)
+
+    private fun <T> readMap(key: String, get: (JSONObject, String) -> T): Map<String, T> {
+        val o = runCatching { JSONObject(sp.getString(key, null) ?: return emptyMap()) }.getOrNull()
+            ?: return emptyMap()
+        return o.keys().asSequence().associateWith { get(o, it) }
+    }
 
     fun clear() = sp.edit().clear().apply()
 }

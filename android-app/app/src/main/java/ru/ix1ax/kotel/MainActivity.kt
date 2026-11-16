@@ -4,76 +4,274 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
+import android.graphics.Color
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.text.InputType
+import android.util.TypedValue
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.PopupMenu
 import android.widget.Switch
 import android.widget.TextView
+import java.util.Locale
 import kotlin.concurrent.thread
 
-/** Вход в OwenCloud и кнопка «Добавить виджет». Нужен один раз. */
+/** Главный экран: температура, лампы, причины аварии и управление прибором. */
 class MainActivity : Activity() {
 
     private lateinit var prefs: Prefs
     private val ui = Handler(Looper.getMainLooper())
+    private var writing = false
+    private var bindingSwitch = false
+
+    // Уставки, которые пользователь меняет кнопками − / +, но ещё не записал
+    private val pending = HashMap<String, Double>()
+    private val pendingCommit = HashMap<String, Runnable>()
+
+    private val autoRefresh = object : Runnable {
+        override fun run() {
+            if (prefs.isConfigured && !writing && pending.isEmpty()) refresh(quiet = true)
+            ui.postDelayed(this, 15000)
+        }
+    }
+
+    private fun <T : View> v(id: Int): T = findViewById(id)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         prefs = Prefs(this)
 
-        findViewById<Button>(R.id.login_btn).setOnClickListener { doLogin() }
-        findViewById<Button>(R.id.add_widget).setOnClickListener { addWidget() }
-        findViewById<Button>(R.id.refresh).setOnClickListener { refresh() }
-        findViewById<Button>(R.id.logout).setOnClickListener { logout() }
-        findViewById<Switch>(R.id.confirm_switch).apply {
-            isChecked = prefs.confirmWrite
-            setOnCheckedChangeListener { _, checked ->
-                prefs.confirmWrite = checked
-                KotelWidget.render(this@MainActivity)
-            }
+        v<Button>(R.id.login_btn).setOnClickListener { doLogin() }
+        v<TextView>(R.id.menu).setOnClickListener { showMenu(it) }
+        v<TextView>(R.id.temp).setOnClickListener { refresh(quiet = false) }
+
+        v<TextView>(R.id.mode_auto).setOnClickListener { ask(P.MODE, "0", "Режим", "Авто") }
+        v<TextView>(R.id.mode_manual).setOnClickListener { ask(P.MODE, "1", "Режим", "Ручной") }
+        v<TextView>(R.id.sel_1).setOnClickListener { ask(P.SELECT, "0", "Уставка", "1") }
+        v<TextView>(R.id.sel_2).setOnClickListener { ask(P.SELECT, "1", "Уставка", "2") }
+
+        setupStepper(P.SP1, "Уставка 1", R.id.sp1_minus, R.id.sp1_val, R.id.sp1_plus)
+        setupStepper(P.SP2, "Уставка 2", R.id.sp2_minus, R.id.sp2_val, R.id.sp2_plus)
+
+        v<Switch>(R.id.start_switch).setOnCheckedChangeListener { sw, checked ->
+            if (bindingSwitch) return@setOnCheckedChangeListener
+            sw.isChecked = !checked // вернём, пока не подтвердят и не запишется
+            ask(P.START, if (checked) "1" else "0", "Удалённый старт", if (checked) "Вкл" else "Выкл")
         }
+        v<TextView>(R.id.reset_btn).setOnClickListener {
+            val target = if (P.isOn(prefs.state.reset)) "0" else "1"
+            ask(P.RESET, target, "Сброс", target)
+        }
+
         showState()
     }
 
+    override fun onResume() {
+        super.onResume()
+        ui.removeCallbacks(autoRefresh)
+        if (prefs.isConfigured) { render(); refresh(quiet = true) }
+        ui.postDelayed(autoRefresh, 15000)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        ui.removeCallbacks(autoRefresh)
+    }
+
+    // ---------- Экраны ----------
+
     private fun showState() {
         val ready = prefs.isConfigured
-        findViewById<View>(R.id.login_panel).visibility = if (ready) View.GONE else View.VISIBLE
-        findViewById<View>(R.id.ready_panel).visibility = if (ready) View.VISIBLE else View.GONE
-        if (ready) {
-            findViewById<TextView>(R.id.device).text = prefs.deviceName
-            findViewById<TextView>(R.id.account).text = prefs.login
-            renderValues()
-            refresh()
+        v<View>(R.id.login_panel).visibility = if (ready) View.GONE else View.VISIBLE
+        v<View>(R.id.ready_panel).visibility = if (ready) View.VISIBLE else View.GONE
+        if (ready) render()
+    }
+
+    private fun render() {
+        val s = prefs.state
+        v<TextView>(R.id.device).text = prefs.deviceName
+        v<TextView>(R.id.temp).text = KotelWidget.formatTemp(s.temp)
+        v<TextView>(R.id.updated).text =
+            if (prefs.lastTime > 0) "обновлено " + KotelWidget.timeFmt(prefs.lastTime) else ""
+
+        // Лампы
+        v<ImageView>(R.id.lamp_work).setImageResource(if (s.working) R.drawable.lamp_green else R.drawable.lamp_off)
+        v<ImageView>(R.id.lamp_alarm).setImageResource(if (s.alarm) R.drawable.lamp_red else R.drawable.lamp_off)
+        v<TextView>(R.id.lamp_work_text).setTextColor(color(if (s.working) R.color.text else R.color.muted))
+        v<TextView>(R.id.lamp_alarm_text).setTextColor(color(if (s.alarm) R.color.red_text else R.color.muted))
+
+        // Причины аварии — каждая отдельной строкой
+        val box = v<LinearLayout>(R.id.errors)
+        box.removeAllViews()
+        val errors = s.activeErrors
+        box.visibility = if (errors.isEmpty()) View.GONE else View.VISIBLE
+        errors.forEach { name ->
+            box.addView(TextView(this).apply {
+                text = "•  $name"
+                setTextColor(color(R.color.red_text))
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+                setPadding(0, dp(3), 0, dp(3))
+            })
+        }
+
+        // Управление
+        seg(R.id.mode_auto, R.id.mode_manual, s[P.MODE], P.MODE)
+        seg(R.id.sel_1, R.id.sel_2, s[P.SELECT], P.SELECT)
+        val sel2 = P.isOn(s[P.SELECT])
+        stepperValue(P.SP1, R.id.sp1_val, R.id.sp1_label, active = !sel2)
+        stepperValue(P.SP2, R.id.sp2_val, R.id.sp2_label, active = sel2)
+
+        bindingSwitch = true
+        v<Switch>(R.id.start_switch).apply {
+            isChecked = P.isOn(s[P.START])
+            isEnabled = prefs.ids.containsKey(P.START)
+        }
+        bindingSwitch = false
+
+        val on = P.isOn(s.reset)
+        v<TextView>(R.id.reset_btn).apply {
+            text = if (s.reset == null) "—" else if (on) "1" else "0"
+            setBackgroundResource(if (on) R.drawable.pill_on else R.drawable.pill_off)
+            setTextColor(if (on) Color.parseColor("#111111") else color(R.color.text))
+        }
+
+        if (!writing) v<TextView>(R.id.status).text = prefs.lastStatus ?: ""
+    }
+
+    private fun seg(leftId: Int, rightId: Int, value: String?, code: String) {
+        val right = P.isOn(value)
+        val known = value != null
+        listOf(leftId to (known && !right), rightId to (known && right)).forEach { (id, selected) ->
+            v<TextView>(id).apply {
+                setBackgroundResource(if (selected) R.drawable.seg_on else 0)
+                setTextColor(if (selected) Color.parseColor("#111111") else color(R.color.muted))
+                isEnabled = prefs.ids.containsKey(code)
+            }
         }
     }
 
-    private fun renderValues() {
-        findViewById<TextView>(R.id.temp).text = KotelWidget.formatTemp(prefs.lastTemp)
-        val time = if (prefs.lastTime > 0) " · обновлено " + KotelWidget.timeFmt(prefs.lastTime) else ""
-        findViewById<TextView>(R.id.meta).text = prefs.lastStatus ?: "Reset: ${prefs.lastReset ?: "—"}$time"
+    // ---------- Уставки ----------
+
+    private fun setupStepper(code: String, label: String, minusId: Int, valId: Int, plusId: Int) {
+        v<TextView>(minusId).setOnClickListener { step(code, label, -0.5) }
+        v<TextView>(plusId).setOnClickListener { step(code, label, +0.5) }
+        v<TextView>(valId).setOnClickListener { inputValue(code, label) }
     }
 
-    private fun refresh() {
-        findViewById<TextView>(R.id.meta).text = "Обновляю…"
+    private fun stepperValue(code: String, valId: Int, labelId: Int, active: Boolean) {
+        val p = pending[code]
+        v<TextView>(valId).apply {
+            text = if (p != null) fmt(p) + "°" else KotelWidget.formatTemp(prefs.state[code])
+            setTextColor(if (p != null) color(R.color.accent) else color(if (active) R.color.text else R.color.muted))
+        }
+        v<TextView>(labelId).setTextColor(color(if (active) R.color.text else R.color.muted))
+    }
+
+    private fun step(code: String, label: String, delta: Double) {
+        val base = pending[code] ?: P.num(prefs.state[code]) ?: return
+        pending[code] = Math.round((base + delta) * 10) / 10.0
+        render()
+        // Пока жмут − / +, не пишем; через 1,5 с после последнего нажатия — спрашиваем
+        pendingCommit[code]?.let { ui.removeCallbacks(it) }
+        val r = Runnable {
+            val value = pending[code] ?: return@Runnable
+            ask(code, fmt(value), label, fmt(value) + "°", onCancel = { pending.remove(code); render() })
+        }
+        pendingCommit[code] = r
+        ui.postDelayed(r, 1500)
+    }
+
+    private fun inputValue(code: String, label: String) {
+        val input = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL or InputType.TYPE_NUMBER_FLAG_SIGNED
+            setText(KotelWidget.formatNum(prefs.state[code]))
+            setSelectAllOnFocus(true)
+        }
+        val wrap = LinearLayout(this).apply {
+            setPadding(dp(22), dp(8), dp(22), 0)
+            addView(input, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        }
+        AlertDialog.Builder(this)
+            .setTitle(label)
+            .setView(wrap)
+            .setPositiveButton("Записать") { _, _ ->
+                val n = input.text.toString().replace(',', '.').toDoubleOrNull()
+                if (n == null) { status("Введите число", error = true); return@setPositiveButton }
+                write(code, fmt(n), label)
+            }
+            .setNegativeButton("Отмена", null)
+            .show()
+        input.requestFocus()
+    }
+
+    // ---------- Запись ----------
+
+    /** Спросить подтверждение (если включено) и записать. */
+    private fun ask(code: String, value: String, label: String, shown: String, onCancel: () -> Unit = {}) {
+        if (writing) return
+        if (!prefs.ids.containsKey(code)) { status("Параметр $label не найден у прибора", error = true); return }
+        if (P.same(prefs.state[code], value)) { pending.remove(code); render(); return }
+        if (!prefs.confirmWrite) { write(code, value, label); return }
+        AlertDialog.Builder(this)
+            .setTitle("$label → $shown?")
+            .setMessage(prefs.deviceName)
+            .setPositiveButton("Записать") { _, _ -> write(code, value, label) }
+            .setNegativeButton("Отмена") { _, _ -> onCancel() }
+            .setOnCancelListener { onCancel() }
+            .show()
+    }
+
+    private fun write(code: String, value: String, label: String) {
+        writing = true
+        status("Записываю $label…")
         thread {
-            KotelWidget.refresh(this, busy = null)
-            ui.post { renderValues() }
+            val result = runCatching { Repo.write(prefs, code, value) }
+            ui.post {
+                writing = false
+                pending.remove(code)
+                result.fold(
+                    onSuccess = { applied -> status(if (applied) "$label: записано" else "$label: команда в очереди, прибор применит её") },
+                    onFailure = { status("Не записалось: ${it.message}", error = true) }
+                )
+                render()
+                KotelWidget.render(this)
+            }
         }
     }
+
+    private fun refresh(quiet: Boolean) {
+        if (!quiet) status("Обновляю…")
+        thread {
+            Repo.refresh(prefs)
+            ui.post {
+                if (!quiet && prefs.lastStatus == null) status("")
+                render()
+                KotelWidget.render(this)
+            }
+        }
+    }
+
+    private fun status(text: String, error: Boolean = false) {
+        v<TextView>(R.id.status).apply {
+            this.text = text
+            setTextColor(color(if (error) R.color.red_text else R.color.muted))
+        }
+    }
+
+    // ---------- Вход, меню ----------
 
     private fun doLogin() {
-        val email = findViewById<EditText>(R.id.email).text.toString().trim()
-        val password = findViewById<EditText>(R.id.password).text.toString()
-        val msg = findViewById<TextView>(R.id.login_msg)
-        val btn = findViewById<Button>(R.id.login_btn)
-        if (email.isEmpty() || password.isEmpty()) {
-            msg.text = "Введите email и пароль"
-            return
-        }
+        val email = v<EditText>(R.id.email).text.toString().trim()
+        val password = v<EditText>(R.id.password).text.toString()
+        val msg = v<TextView>(R.id.login_msg)
+        val btn = v<Button>(R.id.login_btn)
+        if (email.isEmpty() || password.isEmpty()) { msg.text = "Введите email и пароль"; return }
         btn.isEnabled = false
         msg.text = "Вхожу…"
         thread {
@@ -83,7 +281,9 @@ class MainActivity : Activity() {
                 prefs.login = email
                 prefs.password = password
                 prefs.token = token
-                api.autoSetup()
+                val found = api.autoSetup()
+                if (found) Repo.refresh(prefs)
+                found
             }
             ui.post {
                 btn.isEnabled = true
@@ -94,13 +294,31 @@ class MainActivity : Activity() {
                             showState()
                             KotelWidget.render(this)
                         } else {
-                            msg.text = "Вход выполнен, но не нашёл прибор с параметрами P512 и P527"
+                            msg.text = "Вход выполнен, но не нашёл прибор с параметрами ${P.TEMP} и ${P.RESET}"
                         }
                     },
                     onFailure = { msg.text = it.message ?: "Ошибка входа" }
                 )
             }
         }
+    }
+
+    private fun showMenu(anchor: View) {
+        val menu = PopupMenu(this, anchor)
+        menu.menu.add(0, 1, 0, "Добавить виджет на экран")
+        menu.menu.add(0, 2, 1, "Спрашивать подтверждение").apply { isCheckable = true; isChecked = prefs.confirmWrite }
+        menu.menu.add(0, 3, 2, "Обновить")
+        menu.menu.add(0, 4, 3, "Выйти (${prefs.login})")
+        menu.setOnMenuItemClickListener {
+            when (it.itemId) {
+                1 -> addWidget()
+                2 -> { prefs.confirmWrite = !prefs.confirmWrite; KotelWidget.render(this) }
+                3 -> refresh(quiet = false)
+                4 -> logout()
+            }
+            true
+        }
+        menu.show()
     }
 
     private fun addWidget() {
@@ -111,7 +329,7 @@ class MainActivity : Activity() {
         } else {
             AlertDialog.Builder(this)
                 .setTitle("Добавьте виджет вручную")
-                .setMessage("Долгое нажатие на пустом месте рабочего стола → Виджеты → «Котёл».")
+                .setMessage("Долгое нажатие на пустом месте рабочего стола → Виджеты → «Owen Настройки».")
                 .setPositiveButton("OK", null)
                 .show()
         }
@@ -124,10 +342,16 @@ class MainActivity : Activity() {
             .setPositiveButton("Выйти") { _, _ ->
                 prefs.clear()
                 KotelWidget.render(this)
-                findViewById<EditText>(R.id.password).setText("")
+                v<EditText>(R.id.password).setText("")
                 showState()
             }
             .setNegativeButton("Отмена", null)
             .show()
     }
+
+    // ---------- helpers ----------
+
+    private fun color(id: Int) = getColor(id)
+    private fun dp(x: Int) = (x * resources.displayMetrics.density).toInt()
+    private fun fmt(n: Double) = String.format(Locale.US, "%.1f", n)
 }

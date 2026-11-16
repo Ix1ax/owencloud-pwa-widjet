@@ -130,23 +130,54 @@ class OwenApi(private val prefs: Prefs) {
         }
     }
 
-    /** Находит прибор с параметрами P512 (температура) и P527 (Reset). */
+    /** Находит прибор с параметрами P512 (температура) и P527 (Reset) и запоминает id всех нужных полей. */
     fun autoSetup(): Boolean {
         for (d in devices()) {
-            val ps = params(d.id)
-            val t = ps.firstOrNull { it.code == TEMP_CODE } ?: continue
-            val r = ps.firstOrNull { it.code == RESET_CODE } ?: continue
+            val byCode = params(d.id).associateBy { it.code }
+            if (P.TEMP !in byCode || P.RESET !in byCode) continue
             prefs.deviceId = d.id
             prefs.deviceName = d.name
-            prefs.tempId = t.id
-            prefs.resetId = r.id
+            prefs.ids = P.ALL.mapNotNull { code -> byCode[code]?.let { code to it.id } }.toMap()
             return true
         }
         return false
     }
+}
 
-    companion object {
-        const val TEMP_CODE = "P512"
-        const val RESET_CODE = "P527"
+/** Общая логика для приложения и виджета. Методы блокирующие. */
+object Repo {
+    /** Перечитать все значения с OwenCloud. */
+    fun refresh(prefs: Prefs) {
+        try {
+            val api = OwenApi(prefs)
+            if (!prefs.isConfigured || prefs.ids.size < P.ALL.size / 2) {
+                if (!api.autoSetup()) throw ApiException("Не нашёл прибор с параметрами ${P.TEMP} и ${P.RESET}")
+            }
+            val ids = prefs.ids
+            val data = api.lastData(ids.values.toList())
+            val values = HashMap(prefs.values)
+            for ((code, id) in ids) data[id]?.let { values[code] = it.value }
+            prefs.values = values
+            data[ids[P.TEMP]]?.let { prefs.lastTime = it.time }
+            prefs.lastStatus = null
+        } catch (e: Exception) {
+            prefs.lastStatus = e.message ?: "Ошибка"
+        }
+    }
+
+    /**
+     * Записать значение и дождаться, пока прибор его применит.
+     * Возвращает true, если новое значение уже прочитано с прибора.
+     */
+    fun write(prefs: Prefs, code: String, value: String): Boolean {
+        val id = prefs.ids[code] ?: throw ApiException("Параметр $code не найден у прибора")
+        OwenApi(prefs).write(id, value)
+        prefs.values = prefs.values + (code to value) // сразу показываем новое значение
+        for (delay in longArrayOf(2500, 3500)) {
+            Thread.sleep(delay)
+            refresh(prefs)
+            if (P.same(prefs.values[code], value)) return true
+        }
+        return false
     }
 }

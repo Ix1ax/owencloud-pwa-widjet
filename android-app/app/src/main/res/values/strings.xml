@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Котёл</string>
-    <string name="widget_name">Котёл</string>
-    <string name="widget_description">Температура и кнопки RESET 1 / RESET 0</string>
+    <string name="app_name">Owen Настройки</string>
+    <string name="widget_name">Owen Настройки</string>
+    <string name="widget_description">Температура, работа, авария и сброс</string>
 </resources>
