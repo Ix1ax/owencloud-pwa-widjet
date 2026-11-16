@@ -48,7 +48,7 @@ class MainActivity : Activity() {
         prefs = Prefs(this)
 
         v<Button>(R.id.login_btn).setOnClickListener { doLogin() }
-        v<TextView>(R.id.menu).setOnClickListener { showMenu(it) }
+        v<View>(R.id.menu).setOnClickListener { showMenu(it) }
         v<TextView>(R.id.temp).setOnClickListener { refresh(quiet = false) }
 
         v<TextView>(R.id.mode_auto).setOnClickListener { ask(P.MODE, "0", "Режим", "Авто") }
