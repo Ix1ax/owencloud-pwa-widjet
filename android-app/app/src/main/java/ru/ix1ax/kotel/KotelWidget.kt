@@ -2,7 +2,10 @@ package ru.ix1ax.kotel
 
 import android.app.AlarmManager
 import android.app.PendingIntent
+import android.os.Build
+import android.os.Bundle
 import android.os.SystemClock
+import android.util.SizeF
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
@@ -25,6 +28,10 @@ class KotelWidget : AppWidgetProvider() {
         render(context)
         background(context) { refresh(context, busy = true) }
         scheduleTick(context)
+    }
+
+    override fun onAppWidgetOptionsChanged(context: Context, manager: AppWidgetManager, id: Int, options: Bundle) {
+        render(context)
     }
 
     override fun onEnabled(context: Context) = scheduleTick(context)
@@ -119,55 +126,122 @@ class KotelWidget : AppWidgetProvider() {
             val manager = AppWidgetManager.getInstance(context)
             val ids = manager.getAppWidgetIds(ComponentName(context, KotelWidget::class.java))
             if (ids.isEmpty()) return
-            manager.updateAppWidget(ids, build(context, busy))
+            if (Build.VERSION.SDK_INT >= 31) {
+                // Android 12+: система сама выбирает раскладку под размер виджета
+                val views = RemoteViews(mapOf(
+                    SizeF(110f, 110f) to build(context, busy, Kind.SMALL),
+                    SizeF(220f, 50f) to build(context, busy, Kind.STRIP),
+                    SizeF(220f, 115f) to build(context, busy, Kind.MEDIUM),
+                ))
+                manager.updateAppWidget(ids, views)
+            } else {
+                for (id in ids) manager.updateAppWidget(id, build(context, busy, kindFor(manager, id)))
+            }
+        }
+
+        /** Для Android 11 и старше — выбираем раскладку по текущему размеру виджета. */
+        private fun kindFor(manager: AppWidgetManager, id: Int): Kind {
+            val o = manager.getAppWidgetOptions(id)
+            val w = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 250)
+            val h = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 110)
+            return when {
+                w < 220 -> Kind.SMALL
+                h < 115 -> Kind.STRIP
+                else -> Kind.MEDIUM
+            }
         }
 
         fun requestUpdateAll(context: Context) {
             context.sendBroadcast(Intent(context, KotelWidget::class.java).setAction(ACTION_REFRESH))
         }
 
-        private fun build(context: Context, busy: String?): RemoteViews {
+        enum class Kind(val layout: Int) {
+            SMALL(R.layout.widget_small), STRIP(R.layout.widget_strip), MEDIUM(R.layout.widget_medium)
+        }
+
+        private fun build(context: Context, busy: String?, kind: Kind): RemoteViews {
             val prefs = Prefs(context)
             val s = prefs.state
-            val v = RemoteViews(context.packageName, R.layout.widget_kotel)
+            val v = RemoteViews(context.packageName, kind.layout)
             val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            val openApp = PendingIntent.getActivity(context, 11, Intent(context, MainActivity::class.java), flags)
+            if (kind == Kind.MEDIUM) v.setTextViewText(R.id.w_title, prefs.deviceName)
 
             if (!prefs.isConfigured) {
                 v.setTextViewText(R.id.w_temp, "—")
-                v.setTextViewText(R.id.w_meta, "Откройте «Owen Настройки» и войдите")
-                val open = PendingIntent.getActivity(context, 10, Intent(context, MainActivity::class.java), flags)
-                v.setOnClickPendingIntent(R.id.w_root, open)
+                v.setTextViewText(R.id.w_sub, "Войдите в приложении")
+                v.setOnClickPendingIntent(R.id.w_root, openApp)
                 return v
             }
 
             val offline = prefs.offline
+            val alarm = s.alarm
             v.setTextViewText(R.id.w_temp, formatTemp(s.temp))
-            v.setTextColor(R.id.w_temp, if (offline) Color.parseColor("#80FFFFFF") else Color.WHITE)
-            v.setImageViewResource(R.id.w_lamp_work, if (s.working) R.drawable.lamp_green else R.drawable.lamp_off)
-            v.setImageViewResource(R.id.w_lamp_alarm, if (s.alarm) R.drawable.lamp_red else R.drawable.lamp_off)
+            themeText(context, v, R.id.w_temp, if (offline) R.color.w_offline else R.color.w_text)
 
-            val time = if (prefs.lastTime > 0) " · " + timeFmt(prefs.lastTime) else ""
-            val meta = busy
-                ?: if (offline) offlineText(prefs) else prefs.lastStatus ?: (prefs.deviceName + time)
-            v.setTextViewText(R.id.w_meta, meta)
-            v.setTextColor(R.id.w_meta, if (offline && busy == null) Color.parseColor("#FFC46B") else Color.parseColor("#A6FFFFFF"))
+            // Лампы
+            v.setImageViewResource(R.id.w_dot_work, if (s.working) R.drawable.dot_green else R.drawable.dot_off)
+            v.setImageViewResource(R.id.w_dot_alarm, if (alarm) R.drawable.dot_red else R.drawable.dot_off)
+            when (kind) {
+                Kind.MEDIUM -> {
+                    v.setTextViewText(R.id.w_work_text, if (s.working) "Работает" else "Стоит")
+                    themeText(context, v, R.id.w_work_text, if (s.working) R.color.w_text else R.color.w_sub)
+                    v.setTextViewText(R.id.w_alarm_text, if (alarm) "Авария" else "Нет аварий")
+                    themeText(context, v, R.id.w_alarm_text, if (alarm) R.color.red else R.color.w_sub)
+                }
+                Kind.STRIP -> {
+                    themeText(context, v, R.id.w_work_text, if (s.working) R.color.w_text else R.color.w_sub)
+                    themeText(context, v, R.id.w_alarm_text, if (alarm) R.color.red else R.color.w_sub)
+                }
+                Kind.SMALL -> Unit
+            }
 
-            // Кнопка сброса: залитая — Reset = 1, контурная — Reset = 0
+            // Подпись под температурой
+            val time = if (prefs.lastTime > 0) timeFmt(prefs.lastTime) else ""
+            val target = s[if (P.isOn(s[P.SELECT])) P.SP2 else P.SP1]
+            val sub = busy ?: when {
+                offline -> offlineText(prefs)
+                prefs.lastStatus != null -> prefs.lastStatus!!
+                kind == Kind.SMALL -> if (alarm) "Авария" else if (s.working) "Работает · $time" else "Стоит · $time"
+                kind == Kind.MEDIUM && target != null -> "цель ${formatTemp(target)} · $time"
+                else -> time
+            }
+            v.setTextViewText(R.id.w_sub, sub)
+            themeText(context, v, R.id.w_sub, when {
+                busy != null -> R.color.w_sub
+                offline -> R.color.orange
+                prefs.lastStatus != null -> R.color.w_sub
+                kind == Kind.SMALL && alarm -> R.color.red
+                else -> R.color.w_sub
+            })
+
+            // Кнопка сброса: синяя — Reset = 1, светлая — Reset = 0
             val on = P.isOn(s.reset)
-            v.setTextViewText(R.id.w_reset_val, if (s.reset == null) "—" else if (on) "1" else "0")
-            v.setInt(R.id.w_reset, "setBackgroundResource", if (on) R.drawable.reset_on else R.drawable.reset_off)
-            val fg = if (on) Color.parseColor("#111111") else Color.WHITE
-            v.setTextColor(R.id.w_reset_val, fg)
-            v.setTextColor(R.id.w_reset_lbl, if (on) Color.parseColor("#555555") else Color.parseColor("#B3FFFFFF"))
+            val value = if (s.reset == null) "—" else if (on) "1" else "0"
+            v.setTextViewText(R.id.w_reset, when (kind) {
+                Kind.SMALL -> "Сброс $value"
+                Kind.STRIP -> value
+                Kind.MEDIUM -> "Сброс: $value"
+            })
+            v.setInt(R.id.w_reset, "setBackgroundResource", if (on) R.drawable.w_rs_on else R.drawable.w_rs_off)
+            v.setTextColor(R.id.w_reset, if (on) Color.WHITE else context.getColor(R.color.blue))
 
             v.setOnClickPendingIntent(R.id.w_info, PendingIntent.getBroadcast(
                 context, 1, Intent(context, KotelWidget::class.java).setAction(ACTION_REFRESH), flags
             ))
-            v.setOnClickPendingIntent(R.id.w_lamps, PendingIntent.getActivity(
-                context, 11, Intent(context, MainActivity::class.java), flags
-            ))
+            v.setOnClickPendingIntent(R.id.w_icon, openApp)
+            v.setOnClickPendingIntent(R.id.w_lamps, openApp)
             v.setOnClickPendingIntent(R.id.w_reset, writeIntent(context, prefs, P.RESET, if (on) "0" else "1", "Сброс"))
             return v
+        }
+
+        /**
+         * Цвет текста из ресурсов. На Android 12+ цвет берётся в момент отрисовки,
+         * поэтому сам переключается при смене светлой/тёмной темы телефона.
+         */
+        private fun themeText(context: Context, v: RemoteViews, id: Int, colorRes: Int) {
+            if (Build.VERSION.SDK_INT >= 31) v.setColorStateList(id, "setTextColor", colorRes)
+            else v.setTextColor(id, context.getColor(colorRes))
         }
 
         private fun writeIntent(context: Context, prefs: Prefs, code: String, value: String, label: String): PendingIntent {

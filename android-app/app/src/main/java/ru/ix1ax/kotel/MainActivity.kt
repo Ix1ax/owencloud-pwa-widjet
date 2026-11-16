@@ -96,45 +96,70 @@ class MainActivity : Activity() {
 
     private fun render() {
         val s = prefs.state
-        v<TextView>(R.id.device).text = prefs.deviceName
         val offline = prefs.offline
+        v<TextView>(R.id.device).text = prefs.deviceName
+
+        // Строка статуса под заголовком
+        val online = !offline && prefs.lastTime > 0
+        v<ImageView>(R.id.status_dot).setImageResource(
+            when { offline -> R.drawable.circle_orange; online -> R.drawable.circle_green; else -> R.drawable.circle_gray })
+        v<TextView>(R.id.status_line).apply {
+            text = when {
+                offline -> KotelWidget.offlineText(prefs).replaceFirstChar { it.uppercase() }
+                prefs.lastTime > 0 -> "Онлайн · обновлено " + KotelWidget.timeFmt(prefs.lastTime)
+                else -> "Загрузка…"
+            }
+            setTextColor(color(if (offline) R.color.orange else R.color.secondary))
+        }
+
+        // Температура и цель (активная уставка)
         v<TextView>(R.id.temp).apply {
             text = KotelWidget.formatTemp(s.temp)
-            setTextColor(color(if (offline) R.color.muted else R.color.text))
+            setTextColor(color(if (offline) R.color.secondary else R.color.text))
         }
-        v<TextView>(R.id.updated).apply {
-            text = when {
-                offline -> KotelWidget.offlineText(prefs)
-                prefs.lastTime > 0 -> "обновлено " + KotelWidget.timeFmt(prefs.lastTime)
-                else -> ""
-            }
-            setTextColor(color(if (offline) R.color.amber else R.color.muted))
+        val sel2 = P.isOn(s[P.SELECT])
+        val target = s[if (sel2) P.SP2 else P.SP1]
+        v<TextView>(R.id.target).text = if (target != null) "цель " + KotelWidget.formatTemp(target) else ""
+
+        // Плитка «Горелка»
+        v<ImageView>(R.id.burner_icon).apply {
+            setBackgroundResource(if (s.working) R.drawable.circle_green else R.drawable.circle_gray)
+            setImageResource(if (s.working) R.drawable.ic_bolt else R.drawable.ic_bolt_off)
+        }
+        v<TextView>(R.id.burner_text).apply {
+            text = if (!s.hasWorking) "—" else if (s.working) "Работает" else "Стоит"
+            setTextColor(color(if (s.working) R.color.text else R.color.secondary))
         }
 
-        // Лампы
-        v<ImageView>(R.id.lamp_work).setImageResource(if (s.working) R.drawable.lamp_green else R.drawable.lamp_off)
-        v<ImageView>(R.id.lamp_alarm).setImageResource(if (s.alarm) R.drawable.lamp_red else R.drawable.lamp_off)
-        v<TextView>(R.id.lamp_work_text).setTextColor(color(if (s.working) R.color.text else R.color.muted))
-        v<TextView>(R.id.lamp_alarm_text).setTextColor(color(if (s.alarm) R.color.red_text else R.color.muted))
+        // Плитка «Аварии» — красная, если есть хоть одна
+        val errors = s.activeErrors
+        val alarm = errors.isNotEmpty()
+        v<LinearLayout>(R.id.tile_alarm).setBackgroundResource(if (alarm) R.drawable.card_red else R.drawable.card)
+        v<ImageView>(R.id.alarm_icon).apply {
+            setBackgroundResource(if (alarm) R.drawable.circle_white_soft else R.drawable.circle_gray)
+            setImageResource(if (alarm) R.drawable.ic_alert else R.drawable.ic_shield)
+        }
+        v<TextView>(R.id.alarm_label).setTextColor(if (alarm) Color.parseColor("#D9FFFFFF") else color(R.color.secondary))
+        v<TextView>(R.id.alarm_text).apply {
+            text = if (alarm) activeText(errors.size) else "Нет"
+            setTextColor(if (alarm) Color.WHITE else color(R.color.text))
+        }
 
-        // Причины аварии — каждая отдельной строкой
+        // Причины аварии — каждая отдельной строкой с иконкой
         val box = v<LinearLayout>(R.id.errors)
         box.removeAllViews()
-        val errors = s.activeErrors
-        box.visibility = if (errors.isEmpty()) View.GONE else View.VISIBLE
-        errors.forEach { name ->
-            box.addView(TextView(this).apply {
-                text = "•  $name"
-                setTextColor(color(R.color.red_text))
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-                setPadding(0, dp(3), 0, dp(3))
+        box.visibility = if (alarm) View.VISIBLE else View.GONE
+        errors.forEachIndexed { i, name ->
+            if (i > 0) box.addView(View(this).apply {
+                setBackgroundColor(color(R.color.separator))
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(1) / 2 + 1).apply { marginStart = dp(60) }
             })
+            box.addView(errorRow(name))
         }
 
         // Управление
         seg(R.id.mode_auto, R.id.mode_manual, s[P.MODE], P.MODE)
         seg(R.id.sel_1, R.id.sel_2, s[P.SELECT], P.SELECT)
-        val sel2 = P.isOn(s[P.SELECT])
         stepperValue(P.SP1, R.id.sp1_val, R.id.sp1_label, active = !sel2)
         stepperValue(P.SP2, R.id.sp2_val, R.id.sp2_label, active = sel2)
 
@@ -149,10 +174,41 @@ class MainActivity : Activity() {
         v<TextView>(R.id.reset_btn).apply {
             text = if (s.reset == null) "—" else if (on) "1" else "0"
             setBackgroundResource(if (on) R.drawable.pill_on else R.drawable.pill_off)
-            setTextColor(if (on) Color.parseColor("#111111") else color(R.color.text))
+            setTextColor(if (on) Color.WHITE else color(R.color.blue))
         }
 
         if (!writing) v<TextView>(R.id.status).text = prefs.lastStatus ?: ""
+    }
+
+    private fun activeText(n: Int): String = when {
+        n % 10 == 1 && n % 100 != 11 -> "$n активна"
+        n % 10 in 2..4 && n % 100 !in 12..14 -> "$n активны"
+        else -> "$n активных"
+    }
+
+    private fun errorRow(name: String): View {
+        val icon = when {
+            name.contains("масл") -> R.drawable.ic_droplet
+            name.contains("Перегрев") || name.contains("разожг") -> R.drawable.ic_flame
+            else -> R.drawable.ic_alert
+        }
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            minimumHeight = dp(54)
+            setPadding(dp(14), 0, dp(14), 0)
+            addView(ImageView(this@MainActivity).apply {
+                setBackgroundResource(R.drawable.circle_red_soft)
+                setImageResource(icon)
+                setColorFilter(color(R.color.red))
+                setPadding(dp(7), dp(7), dp(7), dp(7))
+            }, LinearLayout.LayoutParams(dp(34), dp(34)))
+            addView(TextView(this@MainActivity).apply {
+                text = name
+                setTextColor(color(R.color.text))
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(12) })
+        }
     }
 
     private fun seg(leftId: Int, rightId: Int, value: String?, code: String) {
@@ -161,7 +217,7 @@ class MainActivity : Activity() {
         listOf(leftId to (known && !right), rightId to (known && right)).forEach { (id, selected) ->
             v<TextView>(id).apply {
                 setBackgroundResource(if (selected) R.drawable.seg_on else 0)
-                setTextColor(if (selected) Color.parseColor("#111111") else color(R.color.muted))
+                typeface = android.graphics.Typeface.create("sans-serif-medium".takeIf { selected } ?: "sans-serif", android.graphics.Typeface.NORMAL)
                 isEnabled = prefs.ids.containsKey(code)
             }
         }
@@ -179,9 +235,9 @@ class MainActivity : Activity() {
         val p = pending[code]
         v<TextView>(valId).apply {
             text = if (p != null) fmt(p) + "°" else KotelWidget.formatTemp(prefs.state[code])
-            setTextColor(if (p != null) color(R.color.accent) else color(if (active) R.color.text else R.color.muted))
+            setTextColor(if (p != null) color(R.color.blue) else color(if (active) R.color.text else R.color.secondary))
         }
-        v<TextView>(labelId).setTextColor(color(if (active) R.color.text else R.color.muted))
+        v<TextView>(labelId).setTextColor(color(if (active) R.color.text else R.color.secondary))
     }
 
     private fun step(code: String, label: String, delta: Double) {
@@ -271,7 +327,7 @@ class MainActivity : Activity() {
     private fun status(text: String, error: Boolean = false) {
         v<TextView>(R.id.status).apply {
             this.text = text
-            setTextColor(color(if (error) R.color.red_text else R.color.muted))
+            setTextColor(color(if (error) R.color.red else R.color.secondary))
         }
     }
 

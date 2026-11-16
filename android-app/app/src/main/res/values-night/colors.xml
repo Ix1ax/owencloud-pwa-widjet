@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Виджет: тёмная тема телефона (чёрный 50%) -->
+    <color name="w_bg">#80000000</color>
+    <color name="w_text">#FFFFFF</color>
+    <color name="w_sub">#A6FFFFFF</color>
+    <color name="w_pill">#33FFFFFF</color>
+    <color name="w_chip">#1FFFFFFF</color>
+    <color name="w_dot_off">#40FFFFFF</color>
+    <color name="w_offline">#66FFFFFF</color>
+</resources>

@@ -1,15 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="bg">#0B0F15</color>
-    <color name="card">#151B24</color>
-    <color name="text">#F2F4F7</color>
-    <color name="muted">#7C8796</color>
-    <color name="dim">#59FFFFFF</color>
-    <color name="line">#14FFFFFF</color>
-    <color name="accent">#3FD15A</color>
-    <color name="blue">#3D7CF2</color>
-    <color name="red">#FF4D4F</color>
-    <color name="red_text">#FF8A8C</color>
-    <color name="flame">#FF6A3D</color>
-    <color name="amber">#FFC46B</color>
+    <!-- Приложение (светлое, как iOS) -->
+    <color name="bg">#F2F2F7</color>
+    <color name="card">#FFFFFF</color>
+    <color name="text">#000000</color>
+    <color name="secondary">#8E8E93</color>
+    <color name="separator">#E5E5EA</color>
+    <color name="blue">#007AFF</color>
+    <color name="green">#34C759</color>
+    <color name="orange">#FF9500</color>
+    <color name="red">#FF3B30</color>
+    <color name="purple">#5856D6</color>
+    <color name="gray">#C7C7CC</color>
+    <color name="amber">#FF9500</color>
+
+    <!-- Виджет: светлая тема телефона -->
+    <color name="w_bg">#80FFFFFF</color>
+    <color name="w_text">#000000</color>
+    <color name="w_sub">#8C000000</color>
+    <color name="w_pill">#99FFFFFF</color>
+    <color name="w_chip">#80FFFFFF</color>
+    <color name="w_dot_off">#26000000</color>
+    <color name="w_offline">#59000000</color>
 </resources>

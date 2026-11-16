@@ -14,7 +14,7 @@ class ConfirmActivity : Activity() {
         val label = intent.getStringExtra(KotelWidget.EXTRA_LABEL) ?: code
         if (code == null || value == null) { finish(); return }
 
-        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
             .setTitle("$label → $value?")
             .setMessage(Prefs(this).deviceName)
             .setPositiveButton("Записать") { _, _ ->
