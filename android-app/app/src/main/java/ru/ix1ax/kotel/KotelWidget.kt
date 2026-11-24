@@ -106,6 +106,7 @@ class KotelWidget : AppWidgetProvider() {
             if (busy) render(context, "обновляю…")
             Repo.refresh(prefs)
             render(context)
+            DashboardMonitor.owenChanged(context)
         }
 
         /** Запись из виджета или из окошка подтверждения. Блокирующий вызов. */
@@ -119,6 +120,7 @@ class KotelWidget : AppWidgetProvider() {
                 prefs.lastStatus = "не записалось: ${e.message}"
             }
             render(context)
+            DashboardMonitor.owenChanged(context)
         }
 
         /** Перерисовать все виджеты из сохранённых значений. */

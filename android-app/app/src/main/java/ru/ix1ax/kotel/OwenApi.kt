@@ -58,7 +58,9 @@ class OwenApi(private val prefs: Prefs) {
     private fun relogin() {
         val email = prefs.login ?: throw ApiException("Нужно войти в приложении", 401)
         val password = prefs.password ?: throw ApiException("Нужно войти в приложении", 401)
-        prefs.token = login(email, password)
+        val token = login(email, password)
+        if (prefs.login != email || prefs.password != password) throw ApiException("Аккаунт OwenCloud изменился", 401)
+        prefs.token = token
     }
 
     /** Запрос с токеном; при 401 один раз входит заново сохранённым паролем. */
@@ -143,9 +145,12 @@ class OwenApi(private val prefs: Prefs) {
 
     /** Находит прибор с параметрами P512 (температура) и P527 (Reset) и запоминает id всех нужных полей. */
     fun autoSetup(): Boolean {
+        val login = prefs.login
+        val password = prefs.password
         for (d in devices()) {
             val byCode = params(d.id).associateBy { it.code }
             if (P.TEMP !in byCode || P.RESET !in byCode) continue
+            if (prefs.login != login || prefs.password != password) return false
             prefs.deviceId = d.id
             prefs.deviceName = d.name
             prefs.ids = P.ALL.mapNotNull { code -> byCode[code]?.let { code to it.id } }.toMap()
@@ -157,24 +162,31 @@ class OwenApi(private val prefs: Prefs) {
 
 /** Общая логика для приложения и виджета. Методы блокирующие. */
 object Repo {
-    /** Перечитать все значения с OwenCloud. */
-    fun refresh(prefs: Prefs) {
+    /** Перечитать данные и вернуть коды параметров, полученных именно в этом запросе. */
+    fun refresh(prefs: Prefs): Set<String> {
+        val login = prefs.login ?: return emptySet()
+        val password = prefs.password ?: return emptySet()
         try {
             val api = OwenApi(prefs)
             if (!prefs.isConfigured || prefs.ids.size < P.ALL.size / 2) {
                 if (!api.autoSetup()) throw ApiException("Не нашёл прибор с параметрами ${P.TEMP} и ${P.RESET}")
             }
+            val deviceId = prefs.deviceId
             val ids = prefs.ids
             val data = api.lastData(ids.values.toList())
+            val deviceStatus = runCatching { api.deviceStatus(deviceId) }.getOrNull()
+            if (prefs.login != login || prefs.password != password || prefs.deviceId != deviceId) return emptySet()
             val values = HashMap(prefs.values)
             for ((code, id) in ids) data[id]?.let { values[code] = it.value }
             prefs.values = values
             data[ids[P.TEMP]]?.let { prefs.lastTime = it.time }
             // Статус прибора — необязательный: если не удалось узнать, опираемся на время показаний
-            prefs.deviceStatus = runCatching { api.deviceStatus(prefs.deviceId) }.getOrNull()
+            prefs.deviceStatus = deviceStatus
             prefs.lastStatus = null
+            return ids.filterValues { it in data }.keys
         } catch (e: Exception) {
-            prefs.lastStatus = e.message ?: "Ошибка"
+            if (prefs.login == login && prefs.password == password) prefs.lastStatus = e.message ?: "Ошибка"
+            return emptySet()
         }
     }
 
@@ -184,12 +196,13 @@ object Repo {
      */
     fun write(prefs: Prefs, code: String, value: String): Boolean {
         val id = prefs.ids[code] ?: throw ApiException("Параметр $code не найден у прибора")
+        val login = prefs.login
+        val deviceId = prefs.deviceId
         OwenApi(prefs).write(id, value)
-        prefs.values = prefs.values + (code to value) // сразу показываем новое значение
         for (delay in longArrayOf(2500, 3500)) {
             Thread.sleep(delay)
-            refresh(prefs)
-            if (P.same(prefs.values[code], value)) return true
+            if (prefs.login != login || prefs.deviceId != deviceId) return false
+            if (code in refresh(prefs) && P.same(prefs.values[code], value)) return true
         }
         return false
     }

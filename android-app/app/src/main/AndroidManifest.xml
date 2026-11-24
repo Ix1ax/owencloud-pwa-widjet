@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
@@ -26,6 +28,25 @@
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
 
+        <activity android:name=".DashboardBuilderActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".DashboardActionActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:configChanges="orientation|screenSize"
+            android:theme="@style/ConfirmTheme" />
+
+        <service android:name=".DashboardRemoteViewsService"
+            android:exported="false" android:permission="android.permission.BIND_REMOTEVIEWS" />
+
+        <service android:name=".DashboardUpdateJob"
+            android:exported="true" android:permission="android.permission.BIND_JOB_SERVICE" />
+
         <!-- Окошко подтверждения поверх рабочего стола -->
         <activity
             android:name=".ConfirmActivity"
@@ -48,6 +69,15 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/kotel_widget_info" />
+        </receiver>
+
+        <receiver android:name=".DashboardWidget" android:exported="false" android:label="@string/dashboard_widget_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/dashboard_widget_info" />
         </receiver>
     </application>
 </manifest>

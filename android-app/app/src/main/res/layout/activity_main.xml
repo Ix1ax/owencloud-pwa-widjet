@@ -80,6 +80,7 @@
                 android:textSize="12sp" />
 
             <include android:id="@+id/yandex_entry_login" layout="@layout/yandex_home_entry" />
+            <include android:id="@+id/dashboard_entry_login" layout="@layout/dashboard_entry" />
         </LinearLayout>
 
         <!-- ===== Главный экран ===== -->
@@ -141,6 +142,7 @@
             </LinearLayout>
 
             <include android:id="@+id/yandex_entry_ready" layout="@layout/yandex_home_entry" />
+            <include android:id="@+id/dashboard_entry_ready" layout="@layout/dashboard_entry" />
 
             <!-- Температура -->
             <LinearLayout

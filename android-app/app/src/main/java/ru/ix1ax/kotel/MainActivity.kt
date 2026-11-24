@@ -54,6 +54,9 @@ class MainActivity : Activity() {
         }
         v<View>(R.id.yandex_entry_login).setOnClickListener(openYandex)
         v<View>(R.id.yandex_entry_ready).setOnClickListener(openYandex)
+        val openBuilder = View.OnClickListener { startActivity(Intent(this, DashboardBuilderActivity::class.java)) }
+        v<View>(R.id.dashboard_entry_login).setOnClickListener(openBuilder)
+        v<View>(R.id.dashboard_entry_ready).setOnClickListener(openBuilder)
         v<View>(R.id.menu).setOnClickListener { showMenu(it) }
         v<TextView>(R.id.temp).setOnClickListener { refresh(quiet = false) }
 
@@ -84,6 +87,7 @@ class MainActivity : Activity() {
         if (prefs.isConfigured) { render(); refresh(quiet = true) }
         ui.postDelayed(autoRefresh, 15000)
         KotelWidget.scheduleTick(this) // на случай, если таймер виджета остановился
+        DashboardMonitor.schedule(this)
     }
 
     override fun onPause() {
@@ -314,6 +318,7 @@ class MainActivity : Activity() {
                 )
                 render()
                 KotelWidget.render(this)
+                DashboardMonitor.owenChanged(this)
             }
         }
     }
@@ -326,6 +331,7 @@ class MainActivity : Activity() {
                 if (!quiet && prefs.lastStatus == null) status("")
                 render()
                 KotelWidget.render(this)
+                DashboardMonitor.owenChanged(this)
             }
         }
     }
@@ -366,6 +372,7 @@ class MainActivity : Activity() {
                             msg.text = ""
                             showState()
                             KotelWidget.render(this)
+                            DashboardMonitor.owenChanged(this)
                         } else {
                             msg.text = "Вход выполнен, но не нашёл прибор с параметрами ${P.TEMP} и ${P.RESET}"
                         }
@@ -415,6 +422,7 @@ class MainActivity : Activity() {
             .setPositiveButton("Выйти") { _, _ ->
                 prefs.clear()
                 KotelWidget.render(this)
+                DashboardMonitor.clearOwen(this)
                 v<EditText>(R.id.password).setText("")
                 showState()
             }

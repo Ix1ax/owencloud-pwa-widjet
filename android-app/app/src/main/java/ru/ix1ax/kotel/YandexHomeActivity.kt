@@ -20,7 +20,6 @@ import android.widget.TextView
 import android.widget.Toast
 import java.io.IOException
 import java.text.DateFormat
-import java.text.NumberFormat
 import java.util.Date
 import kotlin.concurrent.thread
 
@@ -142,14 +141,7 @@ class YandexHomeActivity : Activity() {
         if (device.readings.isEmpty()) addView(line(getString(R.string.yandex_no_readings), 14f, R.color.secondary))
         device.readings.forEach { reading ->
             val activeLeak = reading.metric == YandexMetric.WATER_LEAK && reading.value == "leak"
-            val label = when (reading.metric) {
-                YandexMetric.WATER_LEAK -> R.string.yandex_water
-                YandexMetric.TEMPERATURE -> R.string.yandex_temperature
-                YandexMetric.HUMIDITY -> R.string.yandex_humidity
-                YandexMetric.BATTERY -> R.string.yandex_battery
-                YandexMetric.POWER -> R.string.yandex_power
-            }
-            val readingText = getString(R.string.yandex_reading, getString(label), formatValue(reading))
+            val readingText = getString(R.string.yandex_reading, getString(reading.metric.label), reading.displayValue(this@YandexHomeActivity))
             addView(line(readingText, 16f, if (activeLeak) R.color.red else R.color.text).apply {
                 setPadding(0, dp(8), 0, 0)
                 if (activeLeak) setTypeface(typeface, Typeface.BOLD)
@@ -192,23 +184,6 @@ class YandexHomeActivity : Activity() {
         }
     }
 
-    private fun formatValue(reading: YandexReading): String {
-        val value = reading.value ?: return getString(R.string.yandex_no_value)
-        return when (reading.metric) {
-            YandexMetric.WATER_LEAK -> getString(if (value == "leak") R.string.yandex_leak else R.string.yandex_dry)
-            YandexMetric.POWER -> getString(if (value == true) R.string.yandex_on else R.string.yandex_off)
-            else -> {
-                val number = NumberFormat.getNumberInstance().apply { maximumFractionDigits = 2 }.format(value)
-                when (reading.unit) {
-                    "unit.temperature.celsius" -> getString(R.string.yandex_celsius, number)
-                    "unit.temperature.kelvin" -> getString(R.string.yandex_kelvin, number)
-                    "unit.percent" -> getString(R.string.yandex_percent, number)
-                    else -> number
-                }
-            }
-        }
-    }
-
     private fun line(value: String, size: Float, color: Int) = TextView(this).apply {
         text = value
         textSize = size
@@ -226,7 +201,7 @@ class YandexHomeActivity : Activity() {
 }
 
 /** Состояние экрана переживает поворот телефона и возвращение из браузера. Все изменения выполняются в UI-потоке. */
-private class YandexHomeState(context: Context) {
+private class YandexHomeState(private val context: Context) {
     private val clientId = context.getString(R.string.yandex_oauth_client_id)
     private val store = YandexHomeStore(context)
     private val ui = Handler(Looper.getMainLooper())
@@ -294,6 +269,7 @@ private class YandexHomeState(context: Context) {
         request(loading, { YandexHomeApi.devices(current.accessToken) }) {
             devices = it
             updatedAt = System.currentTimeMillis()
+            DashboardMonitor.acceptYandex(context, current, it)
             showStatus(if (afterPower) R.string.yandex_power_done else 0)
         }
     }
@@ -316,6 +292,7 @@ private class YandexHomeState(context: Context) {
         operation++
         busy = false
         store.clearSession()
+        DashboardMonitor.clearYandex(context)
         session = null
         verifier = null
         devices = emptyList()

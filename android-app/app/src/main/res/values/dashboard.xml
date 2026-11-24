@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="dashboard_widget_name">Мой умный дом</string>
+    <string name="dashboard_widget_description">Соберите виджет из показаний и кнопок OwenCloud и Яндекса</string>
+    <string name="dashboard_builder">Конструктор виджетов</string>
+    <string name="dashboard_edit">Настроить виджет</string>
+    <string name="dashboard_setup">Настроить</string>
+    <string name="dashboard_control">Управление</string>
+</resources>
