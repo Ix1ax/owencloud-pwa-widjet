@@ -26,6 +26,8 @@ jobs:
           java-version: '17'
 
       - name: Build APK
+        env:
+          YANDEX_CLIENT_ID: ${{ vars.YANDEX_CLIENT_ID }}
         run: |
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon

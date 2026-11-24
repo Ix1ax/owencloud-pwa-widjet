@@ -1,6 +1,19 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+}
+
+val localProperties = Properties().apply {
+    providers.fileContents(rootProject.layout.projectDirectory.file("local.properties"))
+        .asText.orNull?.let { load(it.reader()) }
+}
+val yandexClientId = providers.environmentVariable("YANDEX_CLIENT_ID").orNull
+    ?.trim()?.takeIf { it.isNotEmpty() }
+    ?: localProperties.getProperty("yandex.clientId").orEmpty().trim()
+require(yandexClientId.isEmpty() || yandexClientId.matches(Regex("[A-Za-z0-9_-]+"))) {
+    "Use the Client ID from Yandex OAuth in YANDEX_CLIENT_ID or yandex.clientId"
 }
 
 android {
@@ -13,6 +26,7 @@ android {
         targetSdk = 36
         versionCode = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
         versionName = "1.0." + (System.getenv("GITHUB_RUN_NUMBER") ?: "0")
+        resValue("string", "yandex_oauth_client_id", yandexClientId)
     }
 
     // Один и тот же ключ подписи при каждой сборке — чтобы новые версии

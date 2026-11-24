@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="YandexTextButton" parent="@android:style/Widget.Material.Button.Borderless">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textColor">@color/blue</item>
+    </style>
+
+    <string name="yandex_home">Умный дом Яндекса</string>
+    <string name="yandex_back">Назад</string>
+    <string name="yandex_login_help">Выберите Яндекс ID, на котором видны ваши устройства в приложении «Дом с Алисой».</string>
+    <string name="yandex_sign_in">Войти через Яндекс</string>
+    <string name="yandex_not_configured">В этой сборке APK вход через Яндекс ещё не настроен.</string>
+    <string name="yandex_code_help">После входа скопируйте семизначный код со страницы Яндекса и введите его здесь.</string>
+    <string name="yandex_code">Код подтверждения</string>
+    <string name="yandex_connect">Подключить</string>
+    <string name="yandex_refresh">Обновить показания</string>
+    <string name="yandex_logout">Отключить аккаунт</string>
+    <string name="yandex_logout_confirm">Отключить Яндекс на этом телефоне?</string>
+    <string name="yandex_invalid_code">Введите семизначный код из браузера.</string>
+    <string name="yandex_get_new_code">Сначала получите новый код в Яндексе.</string>
+    <string name="yandex_no_browser">Установите браузер, чтобы открыть страницу Яндекса.</string>
+    <string name="yandex_loading">Загружаем устройства…</string>
+    <string name="yandex_connecting">Подключаем аккаунт…</string>
+    <string name="yandex_reconnect">Доступ к умному дому истёк или был отозван. Подключите аккаунт снова.</string>
+    <string name="yandex_empty">В этом аккаунте пока нет устройств. Добавьте их в приложении «Дом с Алисой» и обновите список.</string>
+    <string name="yandex_updated">Данные получены в %1$s</string>
+    <string name="yandex_no_readings">Нет доступных показаний</string>
+    <string name="yandex_no_value">Нет данных</string>
+    <string name="yandex_device_fallback">Устройство</string>
+    <string name="yandex_temperature">Температура</string>
+    <string name="yandex_humidity">Влажность</string>
+    <string name="yandex_battery">Заряд</string>
+    <string name="yandex_water">Протечка</string>
+    <string name="yandex_power">Питание</string>
+    <string name="yandex_turn_on">Включить</string>
+    <string name="yandex_turn_off">Выключить</string>
+    <string name="yandex_confirm_power">%1$s «%2$s»?</string>
+    <string name="yandex_control_help">Чтобы управлять устройствами, отключите аккаунт и войдите снова, разрешив управление в Яндексе.</string>
+    <string name="yandex_power_sending">Отправляем команду в Яндекс…</string>
+    <string name="yandex_power_updating">Яндекс выполнил команду. Обновляем показания…</string>
+    <string name="yandex_power_done">Яндекс выполнил команду. Показания обновлены.</string>
+    <string name="yandex_power_retry">Дождитесь загрузки и попробуйте ещё раз.</string>
+    <string name="yandex_power_failed">Яндекс не подтвердил выполнение команды. Обновите показания, чтобы проверить состояние.</string>
+    <string name="yandex_power_unconfirmed">Не удалось получить результат команды. Обновите показания, чтобы проверить состояние.</string>
+    <string name="yandex_power_forbidden">Яндекс отказал в управлении. Проверьте доступ к устройству и разрешение на управление.</string>
+    <string name="yandex_power_unreachable">Устройство сейчас недоступно для Яндекса.</string>
+    <string name="yandex_power_refresh_failed">Яндекс выполнил команду. Не удалось обновить показания, попробуйте обновить их ещё раз.</string>
+    <string name="yandex_dry">Сухо</string>
+    <string name="yandex_leak">Обнаружена протечка</string>
+    <string name="yandex_on">Включено</string>
+    <string name="yandex_off">Выключено</string>
+    <string name="yandex_celsius">%1$s °C</string>
+    <string name="yandex_kelvin">%1$s K</string>
+    <string name="yandex_percent">%1$s %%</string>
+    <string name="yandex_reading">%1$s · %2$s</string>
+    <string name="yandex_error_code">Код просрочен или не подходит. Получите новый код в Яндексе.</string>
+    <string name="yandex_error_oauth_client">Яндекс отклонил вход. Сообщите об этом разработчику приложения.</string>
+    <string name="yandex_error_scope">Яндекс не предоставил доступ к устройствам. Попробуйте войти снова. Если ошибка повторится, сообщите разработчику.</string>
+    <string name="yandex_error_server">Яндекс вернул ошибку (HTTP %1$d). Попробуйте ещё раз.</string>
+    <string name="yandex_error_request_id">ID запроса Яндекса %1$s</string>
+    <string name="yandex_error_network">Не удалось связаться с Яндексом. Проверьте интернет и попробуйте снова.</string>
+    <string name="yandex_error_response">Не удалось прочитать ответ Яндекса. Попробуйте ещё раз.</string>
+    <string name="yandex_error_storage">Не удалось сохранить подключение на телефоне. Попробуйте снова.</string>
+</resources>

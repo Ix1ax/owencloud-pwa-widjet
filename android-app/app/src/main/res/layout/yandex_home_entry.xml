@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Button xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="16dp"
+    android:minHeight="52dp"
+    android:background="@drawable/card"
+    android:foreground="?android:attr/selectableItemBackground"
+    android:drawableStart="@drawable/ic_yandex_home"
+    android:drawablePadding="12dp"
+    android:gravity="start|center_vertical"
+    android:paddingStart="16dp"
+    android:paddingEnd="16dp"
+    android:stateListAnimator="@null"
+    android:text="@string/yandex_home"
+    android:textAllCaps="false"
+    android:textColor="@color/text"
+    android:textSize="17sp" />

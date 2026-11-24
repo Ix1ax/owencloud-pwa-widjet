@@ -78,6 +78,8 @@
                 android:gravity="center"
                 android:text="Email и пароль хранятся только на этом телефоне и отправляются только в OwenCloud."
                 android:textSize="12sp" />
+
+            <include android:id="@+id/yandex_entry_login" layout="@layout/yandex_home_entry" />
         </LinearLayout>
 
         <!-- ===== Главный экран ===== -->
@@ -137,6 +139,8 @@
                     android:layout_marginStart="6dp"
                     android:textSize="14sp" />
             </LinearLayout>
+
+            <include android:id="@+id/yandex_entry_ready" layout="@layout/yandex_home_entry" />
 
             <!-- Температура -->
             <LinearLayout

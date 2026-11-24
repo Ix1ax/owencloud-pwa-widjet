@@ -4,6 +4,7 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.os.Handler
@@ -48,6 +49,11 @@ class MainActivity : Activity() {
         prefs = Prefs(this)
 
         v<Button>(R.id.login_btn).setOnClickListener { doLogin() }
+        val openYandex = View.OnClickListener {
+            startActivity(Intent(this, YandexHomeActivity::class.java))
+        }
+        v<View>(R.id.yandex_entry_login).setOnClickListener(openYandex)
+        v<View>(R.id.yandex_entry_ready).setOnClickListener(openYandex)
         v<View>(R.id.menu).setOnClickListener { showMenu(it) }
         v<TextView>(R.id.temp).setOnClickListener { refresh(quiet = false) }
 
