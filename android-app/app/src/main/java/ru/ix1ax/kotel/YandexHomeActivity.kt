@@ -56,8 +56,8 @@ class YandexHomeActivity : Activity() {
             }
         }
         view<View>(R.id.yandex_connect).setOnClickListener {
-            val entered = code.text.toString().trim()
-            if (!entered.matches(Regex("[0-9]{7}"))) {
+            val entered = YandexHomeApi.readAuthorizationCode(code.text.toString())
+            if (entered == null) {
                 code.error = getString(R.string.yandex_invalid_code)
                 return@setOnClickListener
             }

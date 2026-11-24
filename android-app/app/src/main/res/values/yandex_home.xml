@@ -13,13 +13,13 @@
     <string name="yandex_login_help">Выберите Яндекс ID, на котором видны ваши устройства в приложении «Дом с Алисой».</string>
     <string name="yandex_sign_in">Войти через Яндекс</string>
     <string name="yandex_not_configured">В этой сборке APK вход через Яндекс ещё не настроен.</string>
-    <string name="yandex_code_help">После входа скопируйте семизначный код со страницы Яндекса и введите его здесь.</string>
-    <string name="yandex_code">Код подтверждения</string>
+    <string name="yandex_code_help">После входа вставьте код Яндекса или ссылку из адресной строки, в которой есть code=.</string>
+    <string name="yandex_code">Код или ссылка из браузера</string>
     <string name="yandex_connect">Подключить</string>
     <string name="yandex_refresh">Обновить показания</string>
     <string name="yandex_logout">Отключить аккаунт</string>
     <string name="yandex_logout_confirm">Отключить Яндекс на этом телефоне?</string>
-    <string name="yandex_invalid_code">Введите семизначный код из браузера.</string>
+    <string name="yandex_invalid_code">Вставьте код или ссылку с кодом со страницы Яндекса.</string>
     <string name="yandex_get_new_code">Сначала получите новый код в Яндексе.</string>
     <string name="yandex_no_browser">Установите браузер, чтобы открыть страницу Яндекса.</string>
     <string name="yandex_loading">Загружаем устройства…</string>

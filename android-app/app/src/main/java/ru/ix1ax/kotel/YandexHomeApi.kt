@@ -69,6 +69,19 @@ internal object YandexHomeApi {
             .build()
     }
 
+    fun readAuthorizationCode(input: String): String? {
+        val text = input.trim()
+        val uri = Uri.parse(text)
+        val code = if (uri.scheme == null) {
+            text
+        } else {
+            if (uri.buildUpon().clearQuery().fragment(null).build().toString() != REDIRECT) return null
+            uri.getQueryParameter("code")
+                ?: Uri.Builder().encodedQuery(uri.encodedFragment).build().getQueryParameter("code")
+        }
+        return code?.takeIf { it.isNotEmpty() && it.all { char -> char in '!'..'~' } }
+    }
+
     fun exchangeCode(clientId: String, code: String, verifier: String): YandexSession {
         val body = mapOf(
             "grant_type" to "authorization_code",

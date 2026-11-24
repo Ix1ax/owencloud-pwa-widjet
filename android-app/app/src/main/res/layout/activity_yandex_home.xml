@@ -54,9 +54,8 @@
                     android:id="@+id/yandex_code"
                     android:layout_marginTop="12dp"
                     android:hint="@string/yandex_code"
-                    android:inputType="numberPassword"
+                    android:inputType="textPassword"
                     android:importantForAutofill="no"
-                    android:maxLength="7"
                     android:saveEnabled="false" />
 
                 <Button
