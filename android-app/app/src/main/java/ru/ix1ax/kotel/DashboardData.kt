@@ -122,7 +122,7 @@ internal val YandexMetric.label: Int get() = when (this) {
 }
 
 internal object DashboardMonitor {
-    private const val PERIODIC = 6201
+    const val PERIODIC = 6201
     private const val REFRESH = 6202
     private const val CHANNEL = "smart_home_alerts"
     private val yandexFetchLock = Any()
@@ -132,6 +132,7 @@ internal object DashboardMonitor {
 
     fun setAlerts(context: Context, enabled: Boolean) {
         DashboardStore(context).prefs.edit().putBoolean("alerts", enabled).apply()
+        if (!enabled) DashboardFastMonitor.stop(context)
         if (!enabled) context.getSystemService(NotificationManager::class.java).apply {
             cancel("owen", 1)
             cancel("yandex", 1)
@@ -140,9 +141,33 @@ internal object DashboardMonitor {
         if (enabled) requestRefresh(context)
     }
 
-    fun canNotify(context: Context): Boolean =
-        (Build.VERSION.SDK_INT < 33 || context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
-            PackageManager.PERMISSION_GRANTED) && context.getSystemService(NotificationManager::class.java).areNotificationsEnabled()
+    fun canNotify(context: Context): Boolean {
+        val manager = context.getSystemService(NotificationManager::class.java)
+        return (Build.VERSION.SDK_INT < 33 || context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED) && manager.areNotificationsEnabled() &&
+            manager.getNotificationChannel(CHANNEL)?.importance != NotificationManager.IMPORTANCE_NONE
+    }
+
+    private fun alertManager(context: Context): NotificationManager =
+        context.getSystemService(NotificationManager::class.java).apply {
+            createNotificationChannel(NotificationChannel(CHANNEL, "Аварии и протечки", NotificationManager.IMPORTANCE_HIGH))
+        }
+
+    fun testNotification(context: Context) {
+        if (!canNotify(context)) return
+        alertManager(context).notify("test", 1, Notification.Builder(context, CHANNEL)
+            .setSmallIcon(R.drawable.ic_alert).setContentTitle("Проверка уведомлений")
+            .setContentText("Уведомления OwenCloud и Яндекса доступны.").setAutoCancel(true).build())
+    }
+
+    fun refreshOwen(context: Context) {
+        val prefs = Prefs(context)
+        if (prefs.loggedIn) Repo.refresh(prefs)
+        if (!Thread.currentThread().isInterrupted) {
+            owenChanged(context)
+            KotelWidget.render(context)
+        }
+    }
 
     fun schedule(context: Context) {
         val scheduler = context.getSystemService(JobScheduler::class.java)
@@ -238,9 +263,7 @@ internal object DashboardMonitor {
         val active = events.filter { (id, item) -> item.first ?: (id in previous) }.keys
         val fresh = active - previous
         if (fresh.isNotEmpty()) {
-            val manager = context.getSystemService(NotificationManager::class.java)
-            val channel = NotificationChannel(CHANNEL, "Аварии и протечки", NotificationManager.IMPORTANCE_HIGH)
-            manager.createNotificationChannel(channel)
+            val manager = alertManager(context)
             val message = fresh.mapNotNull { events[it]?.second?.ifBlank { "Датчик протечки" } }.joinToString("\n")
             val open = PendingIntent.getActivity(context, if (source == "owen") 1 else 2,
                 Intent(context, activity).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), PendingIntent.FLAG_IMMUTABLE)
@@ -257,20 +280,14 @@ class DashboardUpdateJob : JobService() {
     private val workers = ConcurrentHashMap<Int, Thread>()
 
     override fun onStartJob(params: JobParameters): Boolean {
+        if (params.jobId == DashboardMonitor.PERIODIC && DashboardFastMonitor.running) return false
         val worker = thread(start = false) {
             try {
                 val context = applicationContext
                 val ids = DashboardWidget.ids(context)
                 val tiles = ids.flatMap { DashboardStore(context).config(it)?.tiles.orEmpty() }
                 val alerts = DashboardMonitor.alertsRequested(context)
-                if (tiles.any { it.owen != null } || alerts) {
-                    val prefs = Prefs(context)
-                    if (prefs.loggedIn) Repo.refresh(prefs)
-                    if (!Thread.currentThread().isInterrupted) {
-                        DashboardMonitor.owenChanged(context)
-                        KotelWidget.render(context)
-                    }
-                }
+                if (tiles.any { it.owen != null } || alerts) DashboardMonitor.refreshOwen(context)
                 if (!Thread.currentThread().isInterrupted && (tiles.any { it.yandex } || alerts)) {
                     DashboardMonitor.refreshYandex(context)
                 }

@@ -295,13 +295,9 @@ class MainActivity : Activity() {
         if (!prefs.ids.containsKey(code)) { status("Параметр $label не найден у прибора", error = true); return }
         if (P.same(prefs.state[code], value)) { pending.remove(code); render(); return }
         if (!prefs.confirmWrite) { write(code, value, label); return }
-        AlertDialog.Builder(this)
-            .setTitle("$label → $shown?")
-            .setMessage(prefs.deviceName)
-            .setPositiveButton("Записать") { _, _ -> write(code, value, label) }
-            .setNegativeButton("Отмена") { _, _ -> onCancel() }
-            .setOnCancelListener { onCancel() }
-            .show()
+        confirmCommand("$label → $shown", prefs.deviceName, "Записать", onCancel) {
+            write(code, value, label)
+        }
     }
 
     private fun write(code: String, value: String, label: String) {

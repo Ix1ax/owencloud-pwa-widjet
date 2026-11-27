@@ -69,7 +69,7 @@ class Prefs(context: Context) {
         return o.keys().asSequence().associateWith { get(o, it) }
     }
 
-    fun clear() = sp.edit().clear().apply()
+    fun clear() = sp.edit().clear().putBoolean("confirmWrite", confirmWrite).apply()
 
     companion object {
         const val STALE_MS = 15 * 60 * 1000L

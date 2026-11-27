@@ -12,7 +12,7 @@
         android:maxLines="1"
         android:ellipsize="end"
         android:text="@string/dashboard_widget_name"
-        android:textColor="@color/text"
+        android:textColor="@color/dashboard_ink"
         android:textSize="16sp"
         android:textStyle="bold" />
     <ImageView
@@ -21,7 +21,7 @@
         android:layout_height="44dp"
         android:padding="10dp"
         android:src="@drawable/ic_refresh"
-        android:tint="@color/text"
+        android:tint="@color/dashboard_accent"
         android:contentDescription="@string/yandex_refresh" />
     <ImageView
         android:id="@+id/dashboard_widget_edit"
@@ -29,6 +29,6 @@
         android:layout_height="44dp"
         android:padding="10dp"
         android:src="@drawable/ic_sliders"
-        android:tint="@color/text"
+        android:tint="@color/dashboard_accent"
         android:contentDescription="@string/dashboard_edit" />
 </LinearLayout>

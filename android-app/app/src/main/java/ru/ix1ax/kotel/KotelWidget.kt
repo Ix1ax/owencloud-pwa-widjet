@@ -233,7 +233,7 @@ class KotelWidget : AppWidgetProvider() {
             ))
             v.setOnClickPendingIntent(R.id.w_icon, openApp)
             v.setOnClickPendingIntent(R.id.w_lamps, openApp)
-            v.setOnClickPendingIntent(R.id.w_reset, writeIntent(context, prefs, P.RESET, if (on) "0" else "1", "Сброс"))
+            v.setOnClickPendingIntent(R.id.w_reset, writeIntent(context, P.RESET, if (on) "0" else "1", "Сброс"))
             return v
         }
 
@@ -246,18 +246,11 @@ class KotelWidget : AppWidgetProvider() {
             else v.setTextColor(id, context.getColor(colorRes))
         }
 
-        private fun writeIntent(context: Context, prefs: Prefs, code: String, value: String, label: String): PendingIntent {
-            val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-            return if (prefs.confirmWrite) {
-                val i = Intent(context, ConfirmActivity::class.java)
-                    .putExtra(EXTRA_CODE, code).putExtra(EXTRA_VALUE, value).putExtra(EXTRA_LABEL, label)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                PendingIntent.getActivity(context, 100, i, flags)
-            } else {
-                val i = Intent(context, KotelWidget::class.java).setAction(ACTION_WRITE)
-                    .putExtra(EXTRA_CODE, code).putExtra(EXTRA_VALUE, value).putExtra(EXTRA_LABEL, label)
-                PendingIntent.getBroadcast(context, 2, i, flags)
-            }
+        private fun writeIntent(context: Context, code: String, value: String, label: String): PendingIntent {
+            val intent = Intent(context, ConfirmActivity::class.java)
+                .putExtra(EXTRA_CODE, code).putExtra(EXTRA_VALUE, value).putExtra(EXTRA_LABEL, label)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            return PendingIntent.getActivity(context, 100, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         }
 
         fun formatTemp(raw: String?): String {

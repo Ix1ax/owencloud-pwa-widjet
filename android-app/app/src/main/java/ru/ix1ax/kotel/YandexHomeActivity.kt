@@ -169,16 +169,14 @@ class YandexHomeActivity : Activity() {
             isAllCaps = false
             minHeight = dp(48)
             setOnClickListener {
-                AlertDialog.Builder(this@YandexHomeActivity)
-                    .setTitle(getString(R.string.yandex_confirm_power, action, name))
-                    .setMessage(device.location.takeIf { it.isNotEmpty() })
-                    .setNegativeButton(android.R.string.cancel, null)
-                    .setPositiveButton(action) { _, _ ->
-                        if (!state.setPower(device, enable)) {
-                            Toast.makeText(this@YandexHomeActivity, R.string.yandex_power_retry, Toast.LENGTH_SHORT).show()
-                        }
+                val send = {
+                    if (!state.setPower(device, enable)) {
+                        Toast.makeText(this@YandexHomeActivity, R.string.yandex_power_retry, Toast.LENGTH_SHORT).show()
                     }
-                    .show()
+                }
+                if (Prefs(this@YandexHomeActivity).confirmWrite) {
+                    confirmCommand(getString(R.string.yandex_confirm_power, action, name), device.location, action, run = send)
+                } else send()
             }
             powerButtons.add(this)
         }

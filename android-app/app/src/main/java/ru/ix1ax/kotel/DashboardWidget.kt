@@ -61,6 +61,7 @@ class DashboardWidget : AppWidgetProvider() {
         private const val PINNED = "ru.ix1ax.kotel.DASHBOARD_PINNED"
         private const val REFRESH = "ru.ix1ax.kotel.DASHBOARD_REFRESH"
         private const val EXTRA_CONFIG = "dashboardConfig"
+        internal const val EXTRA_TARGET = "dashboardTarget"
         internal const val EXTRA_TILE_INDEX = "dashboardTileIndex"
         internal const val EXTRA_TILE_KIND = "dashboardTileKind"
         internal const val EXTRA_DEVICE = "dashboardDevice"
@@ -136,8 +137,18 @@ class DashboardWidget : AppWidgetProvider() {
                 setViewVisibility(R.id.dashboard_card_action,
                     if (tile.owen?.parameter != null || tile.kind == DashboardTile.YANDEX_POWER) View.VISIBLE else View.GONE)
                 if (card.alert) setTextColor(R.id.dashboard_card_value, context.getColor(R.color.red))
-                setOnClickFillInIntent(R.id.dashboard_card_root, Intent().putExtra(EXTRA_TILE_INDEX, position)
-                    .putExtra(EXTRA_TILE_KIND, tile.kind).putExtra(EXTRA_DEVICE, tile.deviceId))
+                val fill = Intent().putExtra(EXTRA_TILE_INDEX, position)
+                    .putExtra(EXTRA_TILE_KIND, tile.kind).putExtra(EXTRA_DEVICE, tile.deviceId)
+                setOnClickFillInIntent(R.id.dashboard_card_root, fill)
+                val controls = tile.owen?.parameter != null || tile.kind == DashboardTile.YANDEX_POWER
+                setViewVisibility(R.id.dashboard_card_controls, if (controls) View.VISIBLE else View.GONE)
+                if (controls) {
+                    val reset = tile.owen == OwenTile.RESET
+                    setTextViewText(R.id.dashboard_card_off, if (reset) "Сброс 0" else "Выкл.")
+                    setTextViewText(R.id.dashboard_card_on, if (reset) "Сброс 1" else "Вкл.")
+                    setOnClickFillInIntent(R.id.dashboard_card_off, Intent(fill).putExtra(EXTRA_TARGET, 0))
+                    setOnClickFillInIntent(R.id.dashboard_card_on, Intent(fill).putExtra(EXTRA_TARGET, 1))
+                }
             }
     }
 }

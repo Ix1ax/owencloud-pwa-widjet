@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:orientation="vertical" android:background="@drawable/dashboard_panel" android:padding="20dp">
+    <ImageView android:layout_width="40dp" android:layout_height="40dp" android:padding="9dp"
+        android:importantForAccessibility="no" android:background="@drawable/dashboard_chip"
+        android:src="@drawable/ic_bolt" android:tint="@color/dashboard_accent" />
+    <TextView android:id="@+id/command_title" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="14dp" android:textColor="@color/dashboard_ink" android:textSize="22sp" android:textStyle="bold" />
+    <TextView android:id="@+id/command_detail" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="6dp" android:textColor="@color/dashboard_muted" android:textSize="15sp" />
+    <Button android:id="@+id/command_apply" android:layout_width="match_parent" android:layout_height="48dp"
+        android:layout_marginTop="20dp" android:background="@drawable/dashboard_primary"
+        android:textColor="@android:color/white" android:textAllCaps="false" android:stateListAnimator="@null" />
+    <Button android:id="@+id/command_cancel" android:layout_width="match_parent" android:layout_height="48dp"
+        style="?android:attr/borderlessButtonStyle" android:text="Отмена" android:textAllCaps="false"
+        android:textColor="@color/dashboard_muted" />
+</LinearLayout>

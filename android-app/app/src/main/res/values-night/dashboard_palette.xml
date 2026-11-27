@@ -1,0 +1,9 @@
+<resources>
+    <color name="dashboard_surface">#101A2C</color>
+    <color name="dashboard_tile">#1A2941</color>
+    <color name="dashboard_ink">#F0F5FF</color>
+    <color name="dashboard_muted">#BECEE7</color>
+    <color name="dashboard_accent">#A9C4FF</color>
+    <color name="dashboard_tint">#263B60</color>
+    <color name="dashboard_primary_color">#244FBB</color>
+</resources>

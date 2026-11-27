@@ -1,7 +1,6 @@
 package ru.ix1ax.kotel
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.Intent
 import android.os.Bundle
 
@@ -14,21 +13,16 @@ class ConfirmActivity : Activity() {
         val label = intent.getStringExtra(KotelWidget.EXTRA_LABEL) ?: code
         if (code == null || value == null) { finish(); return }
 
-        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
-            .setTitle("$label → $value?")
-            .setMessage(Prefs(this).deviceName)
-            .setPositiveButton("Записать") { _, _ ->
-                sendBroadcast(
-                    Intent(this, KotelWidget::class.java)
-                        .setAction(KotelWidget.ACTION_WRITE)
-                        .putExtra(KotelWidget.EXTRA_CODE, code)
-                        .putExtra(KotelWidget.EXTRA_VALUE, value)
-                        .putExtra(KotelWidget.EXTRA_LABEL, label)
-                )
-                finish()
-            }
-            .setNegativeButton("Отмена") { _, _ -> finish() }
-            .setOnCancelListener { finish() }
-            .show()
+        val send = {
+            sendBroadcast(Intent(this, KotelWidget::class.java)
+                .setAction(KotelWidget.ACTION_WRITE)
+                .putExtra(KotelWidget.EXTRA_CODE, code)
+                .putExtra(KotelWidget.EXTRA_VALUE, value)
+                .putExtra(KotelWidget.EXTRA_LABEL, label))
+            finish()
+        }
+        if (Prefs(this).confirmWrite) {
+            confirmCommand("$label → $value", Prefs(this).deviceName, "Записать", onCancel = { finish() }, run = send)
+        } else send()
     }
 }

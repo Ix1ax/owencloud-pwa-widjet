@@ -79,6 +79,12 @@ class DashboardBuilderActivity : Activity() {
                 }
             }
         }
+        page.addView(Switch(this).apply {
+            text = "Подтверждать команды"
+            minHeight = dp(48)
+            isChecked = Prefs(this@DashboardBuilderActivity).confirmWrite
+            setOnCheckedChangeListener { _, enabled -> Prefs(this@DashboardBuilderActivity).confirmWrite = enabled }
+        })
         page.addView(heading("Фоновые уведомления", 20f))
         page.addView(body("Аварии OwenCloud и протечки Яндекса. Android проверяет устройства в фоне примерно каждые 15 минут или позже."))
         page.addView(Switch(this).apply {
@@ -86,12 +92,31 @@ class DashboardBuilderActivity : Activity() {
             minHeight = dp(48)
             isChecked = DashboardMonitor.alertsRequested(this@DashboardBuilderActivity)
             setOnCheckedChangeListener { _, enabled ->
-                if (!enabled) DashboardMonitor.setAlerts(this@DashboardBuilderActivity, false)
+                if (!enabled) {
+                    DashboardMonitor.setAlerts(this@DashboardBuilderActivity, false)
+                    showOverview()
+                }
                 else enableAlerts()
             }
         })
         if (DashboardMonitor.alertsRequested(this) && !DashboardMonitor.canNotify(this)) {
-            button(page, "Разрешить уведомления в Android") { openNotificationSettings() }
+            page.addView(body("Android блокирует уведомления. Проверьте разрешение и категорию «Аварии и протечки»."))
+            button(page, "Разрешить уведомления в Android") { enableAlerts() }
+        } else if (DashboardMonitor.alertsRequested(this)) {
+            page.addView(body("Уведомления разрешены в Android."))
+            button(page, "Проверить уведомления") { DashboardMonitor.testNotification(this) }
+            page.addView(Switch(this).apply {
+                text = "Проверять каждую минуту"
+                minHeight = dp(48)
+                isChecked = DashboardFastMonitor.running
+                setOnCheckedChangeListener { _, enabled ->
+                    if (enabled) {
+                        runCatching { DashboardFastMonitor.start(this@DashboardBuilderActivity) }
+                            .onFailure { toast("Android не запустил быстрый мониторинг"); showOverview() }
+                    } else DashboardFastMonitor.stop(this@DashboardBuilderActivity)
+                }
+            })
+            page.addView(body("Быстрый режим показывает постоянное уведомление и расходует больше заряда."))
         }
     }
 
@@ -298,10 +323,18 @@ class DashboardBuilderActivity : Activity() {
     private fun enableAlerts() {
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
             android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 41)
+            if (store.prefs.getBoolean("notificationPromptShown", false) &&
+                !shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)) {
+                DashboardMonitor.setAlerts(this, true)
+                openNotificationSettings()
+            } else {
+                store.prefs.edit().putBoolean("notificationPromptShown", true).apply()
+                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 41)
+            }
         } else {
             DashboardMonitor.setAlerts(this, true)
             if (!DashboardMonitor.canNotify(this)) openNotificationSettings()
+            showOverview()
         }
     }
 
